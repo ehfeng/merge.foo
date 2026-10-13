@@ -5,7 +5,7 @@ type Repository={id:number;installationId:number;full_name:string;private:boolea
 export type WebhookInbox={repo:Repository;event:string;delivery:string;receivedAt:string;state:'pending'|'done';lease?:{id:string;expiresAt:string}};
 export type WebhookReceiptStage='entry'|'configuration'|'body'|'signature'|'decode'|'scope'|'store'|'store_read'|'store_write'|'store_confirm'|'complete';
 export type WebhookReceiptDiagnostic={phase:'entry'|'outcome';stage:WebhookReceiptStage;delivery?:string;status?:number;elapsedMs:number;errorClass?:'timeout'|'configuration'|'body'|'signature'|'payload'|'storage'|'internal'};
-export type WebhookReceiptOptions={secret?:string;scopes?:string;getStore:()=>Promise<StateStore>;deadlineMs?:number;diagnostic?:(diagnostic:WebhookReceiptDiagnostic)=>void};
+export type WebhookReceiptOptions={secret?:string;scopes?:string;getStore:()=>Promise<StateStore>;acceptRepository?:(repo:Repository,store:StateStore)=>Promise<boolean>;deadlineMs?:number;diagnostic?:(diagnostic:WebhookReceiptDiagnostic)=>void};
 class ReceiptDeadlineError extends Error {}
 class ReceiptError extends Error {constructor(message:string,readonly status:number){super(message);}}
 const EVENTS=new Set(['pull_request','pull_request_review','pull_request_review_comment']);
@@ -67,9 +67,10 @@ export async function handleWebhookReceipt(request:Request,options:WebhookReceip
     try{input=JSON.parse(new TextDecoder().decode(body));}catch{throw new ReceiptError('Invalid webhook JSON.',400);}
     if(!input||typeof input!=='object')throw new ReceiptError('Invalid webhook JSON.',400);
     const repo=repository({...input.repository,installationId:input.installation?.id});
-    at('scope');if(!scoped(repo,options.scopes))return json({accepted:true,ignored:true},202);
+    at('scope');if(!options.acceptRepository&&!scoped(repo,options.scopes))return json({accepted:true,ignored:true},202);
     const scope=`${repo.installationId}:${repo.id}`,key=`webhook:${delivery}`;
     at('store');const store=await options.getStore();
+    if(options.acceptRepository){at('scope');if(!await options.acceptRepository(repo,store))return json({accepted:true,ignored:true},202);}
     at('store_read');const previous=await store.read<WebhookInbox>(scope,'inbox',key);
     at('store_write');
     if(previous?.value.state==='done')return json({accepted:true,duplicate:true},202);

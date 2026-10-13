@@ -1,11 +1,16 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
 import {generateKeyPairSync,verify} from 'node:crypto';
-import {appJwt,authorizeBackgroundGrant,installationPrincipal,validWebhookSignature} from './github-app';
+import {appJwt,authorizeBackgroundGrant,installationPrincipal,validWebhookSignature,backgroundConfigured} from './github-app';
 import type {WorkflowAction,WorkflowDocument} from '../workflow/types';
 const secret='test-only-webhook-secret-with-32-characters';
 const repo={id:42,installationId:7,full_name:'owner/repo',private:true};
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('background GitHub credentials',()=>{
+  it('makes operator readiness independent of the legacy repository allowlist',()=>{
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY','fixture-key-presence');vi.stubEnv('GITHUB_APP_ID','99');vi.stubEnv('GITHUB_WEBHOOK_SECRET',secret);vi.stubEnv('WORKFLOW_RECONCILE_SECRET',secret);vi.stubEnv('WORKFLOW_REPOSITORIES','[]');
+    expect(backgroundConfigured(repo)).toBe(true);expect(backgroundConfigured({...repo,id:999,installationId:81,full_name:'another/private'})).toBe(true);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET','');expect(backgroundConfigured(repo)).toBe(false);
+  });
   it.each(['pkcs1','pkcs8'] as const)('signs GitHub JWT using %s PEM with bounded lifetime',async type=>{
     const keys=generateKeyPairSync('rsa',{modulusLength:2048});
     const jwt=await appJwt('Iv1_fixture',keys.privateKey.export({type,format:'pem'}).toString(),1700000000000);
@@ -19,12 +24,22 @@ describe('background GitHub credentials',()=>{
     vi.stubEnv('GITHUB_APP_PRIVATE_KEY',keys.privateKey.export({format:'pem',type:'pkcs1'}).toString());vi.stubEnv('GITHUB_APP_ID','99');
     const fetcher=vi.fn(async(url:string,options?:RequestInit)=>{
       if(url.endsWith('/app'))return Response.json({id:99,slug:'merge-foo'});
-      if(url.endsWith('/app/installations/7'))return Response.json({id:7,app_id:99,suspended_at:null});
+      if(url.endsWith('/app/installations/7'))return Response.json({id:7,app_id:99,suspended_at:null,permissions:{pull_requests:'write'}});
       if(url.endsWith('/access_tokens')){expect(JSON.parse(options?.body as string)).toEqual({repository_ids:[42],permissions:{pull_requests:'write',checks:'read',statuses:'read',metadata:'read'}});return Response.json({token:'fixture-token',expires_at:new Date(Date.now()+3600000).toISOString(),permissions:{pull_requests:'write'}});}
       return Response.json({id:43,full_name:'owner/repo'});
     });vi.stubGlobal('fetch',fetcher);
     await expect(installationPrincipal(repo)).rejects.toThrow('Repository identity changed');
     expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+  it.each(['read','missing'] as const)('rejects installation with %s PR permission before minting a token',async permission=>{
+    const keys=generateKeyPairSync('rsa',{modulusLength:2048});vi.stubEnv('GITHUB_APP_PRIVATE_KEY',keys.privateKey.export({format:'pem',type:'pkcs8'}).toString());vi.stubEnv('GITHUB_APP_ID','99');
+    const fetcher=vi.fn().mockResolvedValueOnce(Response.json({id:99,slug:'merge-foo'})).mockResolvedValueOnce(Response.json({id:7,app_id:99,suspended_at:null,...permission==='missing'?{}:{permissions:{pull_requests:permission}}}));vi.stubGlobal('fetch',fetcher);
+    await expect(installationPrincipal(repo)).rejects.toThrow('installation is unavailable');expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it.each([true,undefined])('rejects archived or unverifiable repository status (%s)',async archived=>{
+    const keys=generateKeyPairSync('rsa',{modulusLength:2048});vi.stubEnv('GITHUB_APP_PRIVATE_KEY',keys.privateKey.export({format:'pem',type:'pkcs8'}).toString());vi.stubEnv('GITHUB_APP_ID','99');
+    const fetcher=vi.fn().mockResolvedValueOnce(Response.json({id:99,slug:'merge-foo'})).mockResolvedValueOnce(Response.json({id:7,app_id:99,suspended_at:null,permissions:{pull_requests:'write'}})).mockResolvedValueOnce(Response.json({token:'fixture-token',expires_at:new Date(Date.now()+3600000).toISOString(),permissions:{pull_requests:'write'}})).mockResolvedValueOnce(Response.json({id:42,full_name:'owner/repo',archived}));vi.stubGlobal('fetch',fetcher);
+    await expect(installationPrincipal(repo)).rejects.toThrow('archived');expect(fetcher).toHaveBeenCalledTimes(4);
   });
   it('rechecks numeric enrollment actor identity and current write permission',async()=>{
     const document={config:{stacks:{s:{enrolled:true,prIds:['p'],actorId:'5',actorLogin:'writer'}}}} as unknown as WorkflowDocument;
@@ -39,7 +54,7 @@ describe('background GitHub credentials',()=>{
   });
   it('rejects invalid installation expiry before using the returned credential',async()=>{
     const keys=generateKeyPairSync('rsa',{modulusLength:2048});vi.stubEnv('GITHUB_APP_PRIVATE_KEY',keys.privateKey.export({format:'pem',type:'pkcs8'}).toString());vi.stubEnv('GITHUB_APP_ID','99');
-    const network=vi.fn().mockResolvedValueOnce(Response.json({id:99,slug:'merge-foo'})).mockResolvedValueOnce(Response.json({id:7,app_id:99,suspended_at:null})).mockResolvedValueOnce(Response.json({token:'fixture',expires_at:'invalid',permissions:{pull_requests:'write'}}));vi.stubGlobal('fetch',network);
+    const network=vi.fn().mockResolvedValueOnce(Response.json({id:99,slug:'merge-foo'})).mockResolvedValueOnce(Response.json({id:7,app_id:99,suspended_at:null,permissions:{pull_requests:'write'}})).mockResolvedValueOnce(Response.json({token:'fixture',expires_at:'invalid',permissions:{pull_requests:'write'}}));vi.stubGlobal('fetch',network);
     await expect(installationPrincipal(repo)).rejects.toThrow('unusable installation token');expect(network).toHaveBeenCalledTimes(3);
   });
 });

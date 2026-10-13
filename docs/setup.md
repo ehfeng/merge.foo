@@ -1,5 +1,7 @@
 # User onboarding and operator setup
 
+For current background review setup, configure the App, shared state and runner once. Each authorized user can enable coordination for any connected repository with accepted review-write permissions; operators do not maintain a per-user repository list. `WORKFLOW_REPOSITORIES` is only a bounded legacy migration input. See [connected repository automation](automation.md).
+
 The public product uses one operator-owned merge.foo GitHub App. Developers sign in to that existing App; they do not register an App, handle its client secret, run setup scripts, or configure Cloudflare.
 
 ## Normal user onboarding

@@ -18,6 +18,10 @@ describe('full repository ingestion',()=>{
   afterEach(()=>vi.unstubAllGlobals());
   const session={token:'test',userId:'1',login:'alice',expires:Date.now()+10000};
   const mock=(pages:Record<string,unknown>[])=>{let count=0;const fetcher=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input);if(url.endsWith('/user/installations?per_page=100&page=1'))return Response.json({installations:[{id:8}]});if(url.includes('/user/installations/8/repositories'))return Response.json({repositories:[{id:1,full_name:'acme/platform',private:false}]});if(url.endsWith('/graphql')){const body=JSON.parse(String(init?.body));if(body.query.includes('Ancestry'))return Response.json({data:{repository:{viewerPermission:'WRITE',pullRequests:{nodes:[],pageInfo:{hasNextPage:false,endCursor:null}}}}});return Response.json({data:pages[count++]});}throw new Error('Unexpected test URL '+url);});vi.stubGlobal('fetch',fetcher);return fetcher;};
+  it('reports the accepted installation review permission separately from repository visibility',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>{const url=String(input);if(url.includes('/user/installations?'))return Response.json({installations:[{id:8,permissions:{pull_requests:'write'}},{id:9,permissions:{pull_requests:'read'}}]});if(url.includes('/8/repositories?'))return Response.json({repositories:[{id:1,full_name:'fixture/write',private:false}]});if(url.includes('/9/repositories?'))return Response.json({repositories:[{id:2,full_name:'fixture/read',private:true}]});throw new Error('Unexpected fixture path.');}));
+    expect(await repositories(session)).toEqual([{id:1,installationId:8,full_name:'fixture/write',private:false,canRequestReviews:true},{id:2,installationId:9,full_name:'fixture/read',private:true,canRequestReviews:false}]);
+  });
   it('completes raw pagination before excluding archived repositories across installations',async()=>{
     const publicRepo={id:101,full_name:'owner/active-public',private:false,archived:false};const privateRepo={id:102,full_name:'owner/active-private',private:true,archived:false};
     const fetcher=vi.fn(async(input:RequestInfo|URL)=>{

@@ -1,5 +1,9 @@
 # Architecture and implementation decisions
 
+## Connected repository automation
+
+Repository discovery is stored in the provider-neutral automation registry, separate from per-repository workflow authority. Enrollment registers discovery before committing enabled intent. Signed receipts, the bounded registry/inbox cursors and the protected scheduler use that state; connecting alone does not enroll or release reviews. See [the automation contract](automation.md).
+
 This document describes current code and its verification boundaries. The [original technical structure](product-plan.md#7-proposed-technical-structure) remains a historical proposal; later decisions selected vinext and Cloudflare, with provider-neutral workflow/state modules and Node/Vercel build targets. Product rules remain in [progressive-review.md](progressive-review.md), and scope is tracked in [roadmap.md](roadmap.md).
 
 The [scoped live pilot](pilot.md) verified one public A → B → C chain, one human reviewer, hosted SQLite plans, release before merge, holds, comment preservation, reapproval, background progression and cascade rollback. Five webhook deliveries returned HTTP 500, including two after the native-entry mitigation; their cause remains unresolved. Automatic progression and global GitHub workflow writes were disabled after the pilot. Source implementation, passing local tests and successful pilot effects do not establish broader production readiness or reliable webhook acceptance.

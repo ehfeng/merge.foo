@@ -1,4 +1,5 @@
 import {handleWebhookReceipt} from './webhook-receipt';
+import {findAutomationRepository} from './automation-registry';
 import {DurableObjectStateStore,type ObjectNamespace} from './state/durable-object';
 import {PostgresStateStore,neonQuery} from './state/postgres';
 import type {StateStore} from './state/types';
@@ -9,7 +10,7 @@ export async function nativeWebhookIngress(request:Request,environment:Record<st
   const stringValue=(key:string)=>typeof environment[key]==='string'?environment[key] as string:undefined;
   return handleWebhookReceipt(request,{
     secret:stringValue('GITHUB_WEBHOOK_SECRET'),
-    scopes:stringValue('WORKFLOW_REPOSITORIES'),
+    acceptRepository:async(repo,store)=>{const saved=await findAutomationRepository(store,repo);return !!saved&&saved.full_name.toLowerCase()===repo.full_name.toLowerCase();},
     diagnostic:diagnostic=>console.info(JSON.stringify({event:'github_webhook_receipt',...diagnostic})),
     getStore:async():Promise<StateStore>=>{
       const connection=stringValue('DATABASE_URL');

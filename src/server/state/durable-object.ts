@@ -1,5 +1,5 @@
-import type {ResourceKind,ScopeSnapshot,StateActor,StateRecord,StateStore} from './types';
-import {validateScope,validateWrite} from './types';
+import type {ResourceKind,ScopeSnapshot,StateActor,StateRecord,StateScan,StateStore} from './types';
+import {validateScope,validateWrite,validateScan} from './types';
 export interface ObjectNamespace {idFromName(name:string):unknown;get(id:unknown):{fetch(request:Request):Promise<Response>}}
 /** Only this optional adapter uses the provider's fetch transport. Public store contracts do not. */
 export class DurableObjectStateStore implements StateStore {
@@ -12,6 +12,10 @@ export class DurableObjectStateStore implements StateStore {
   }
   async read<T>(scope:string,kind:ResourceKind,key:string):Promise<StateRecord<T>|null> {return this.call(scope,'POST',{operation:'read',kind,key});}
   async list<T>(scope:string,kind:ResourceKind):Promise<ScopeSnapshot<T>> {return this.call(scope,'POST',{operation:'list',kind});}
+  async scan<T>(scope:string,kind:ResourceKind,options:StateScan):Promise<StateRecord<T>[]> {
+    validateScan(options);
+    return this.call(scope,'POST',{operation:'scan',kind,...options});
+  }
   async compareAndSwap<T>(scope:string,kind:ResourceKind,key:string,expectedVersion:number,value:T,actor:StateActor):Promise<StateRecord<T>|null> {
     validateWrite(scope,key,expectedVersion,value);
     return this.call(scope,'POST',{operation:'cas',kind,key,expectedVersion,value,actor});

@@ -1,4 +1,5 @@
-import type {Plan,PlanHistory,ResourceKind,StateActor,StateRecord} from './state/types';
+import type {Plan,PlanHistory,ResourceKind,StateActor,StateRecord,StateScan} from './state/types';
+import {validateScan} from './state/types';
 type Sql={exec<T=Record<string,unknown>>(query:string,...bindings:(string|number|null)[]):{toArray():T[]}};
 type State={storage:{sql:Sql;transactionSync<T>(closure:()=>T):T}};
 export class PlannedAssignments {
@@ -31,8 +32,16 @@ export class PlannedAssignments {
   }
   private async resources(request:Request):Promise<Response> {
     if(request.method!=='POST')return Response.json({error:'Method not allowed.'},{status:405});
-    const input=await request.json() as {operation:string;kind:ResourceKind;key:string;expectedVersion:number;value:unknown;actor:StateActor};
+    const input=await request.json() as {operation:string;kind:ResourceKind;key:string;expectedVersion:number;value:unknown;actor:StateActor}&StateScan;
     if(!['plan','workflow','inbox','job'].includes(input.kind))return Response.json({error:'Invalid resource kind.'},{status:400});
+    if(input.operation==='scan') {
+      try{validateScan(input);}catch{return Response.json({error:'Invalid bounded state scan.'},{status:400});}
+      const after=input.after??'';
+      const rows=input.kind==='plan'
+        ?this.sql.exec<{document:string}>('SELECT document FROM plans WHERE pr_id > ? ORDER BY pr_id LIMIT ?',after,input.limit).toArray().map(row=>this.planRecord(JSON.parse(row.document)))
+        :this.sql.exec<{document:string}>('SELECT document FROM resources WHERE kind = ? AND resource_key > ? ORDER BY resource_key LIMIT ?',input.kind,after,input.limit).toArray().map(row=>JSON.parse(row.document));
+      return Response.json(rows);
+    }
     if(input.kind==='plan') {
       if(input.operation==='read') {
         const row=this.sql.exec<{document:string}>('SELECT document FROM plans WHERE pr_id = ?',input.key).toArray()[0];

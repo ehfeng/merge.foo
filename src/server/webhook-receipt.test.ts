@@ -15,6 +15,7 @@ function fixture(){
   const store:StateStore={
     async read<T>(scope:string,kind:ResourceKind,key:string){await Promise.resolve();return rows.get(`${scope}/${kind}/${key}`) as StateRecord<T>|undefined??null;},
     async list<T>(){return {records:[...rows.values()] as StateRecord<T>[],history:[]};},
+    async scan<T>(scope:string,kind:ResourceKind,{after,limit}:{after?:string;limit:number}){return [...rows.values()].filter(row=>row.kind===kind&&rows.has(`${scope}/${kind}/${row.key}`)&&(!after||row.key>after)).sort((a,b)=>a.key.localeCompare(b.key)).slice(0,limit) as StateRecord<T>[];},
     async compareAndSwap<T>(scope:string,kind:ResourceKind,key:string,version:number,value:T,actor:StateActor){await Promise.resolve();const path=`${scope}/${kind}/${key}`;if((rows.get(path)?.version??0)!==version)return null;const row={key,kind,version:version+1,value,actor,updatedAt:new Date().toISOString()};rows.set(path,row);return row;},
   };
   return {rows,store,options:{secret,scopes,getStore:async()=>store} satisfies WebhookReceiptOptions};

@@ -1,7 +1,7 @@
 import {github,revalidateIdentity,type Session} from './auth';
 import type { PullRequest, Reviewer, Workspace } from '../domain/types';
 
-export type Repo = {id:number;full_name:string;private:boolean;installationId:number};
+export type Repo = {id:number;full_name:string;private:boolean;installationId:number;canRequestReviews?:boolean};
 type InstalledRepo=Omit<Repo,'installationId'>&{archived?:boolean};
 type GqlUser = {login:string};
 type RepoIdentity={id:string;nameWithOwner:string};
@@ -24,9 +24,9 @@ async function allPages<T>(token:string,path:string,field?:string): Promise<T[]>
   throw new Error('GitHub coverage limit reached. The repository list could not be completed.');
 }
 export async function repositories(data:Session):Promise<Repo[]> {
-  const installs=await allPages<{id:number}>(data.token,'/user/installations','installations');
-  const pages=await Promise.all(installs.map(async i=>(await allPages<InstalledRepo>(data.token,`/user/installations/${i.id}/repositories`,'repositories')).filter(r=>r.archived!==true).map(r=>({...r,installationId:i.id}))));
-  return [...new Map(pages.flat().map(r=>[r.id,{id:r.id,full_name:r.full_name,private:r.private,installationId:r.installationId}])).values()];
+  const installs=await allPages<{id:number;permissions?:{pull_requests?:string}}>(data.token,'/user/installations','installations');
+  const pages=await Promise.all(installs.map(async i=>(await allPages<InstalledRepo>(data.token,`/user/installations/${i.id}/repositories`,'repositories')).filter(r=>r.archived!==true).map(r=>({...r,installationId:i.id,...(i.permissions?{canRequestReviews:i.permissions.pull_requests==='write'}:{})}))));
+  return [...new Map(pages.flat().map(r=>[r.id,{id:r.id,full_name:r.full_name,private:r.private,installationId:r.installationId,...(typeof r.canRequestReviews==='boolean'?{canRequestReviews:r.canRequestReviews}:{})}])).values()];
 }
 export const verifyIdentity=revalidateIdentity;
 export async function validateRepositoryAccess(data:Session,fullName:string):Promise<Repo> {

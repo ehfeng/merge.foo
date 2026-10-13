@@ -13,6 +13,7 @@ This documentation reflects the uploaded `merge-foo-product-plan(1).md` and the 
 | [Architecture](architecture.md) | Current code structure and proposed production architecture | Section 7 plus later stack choices |
 | [Normal user onboarding](setup.md#normal-user-onboarding) | Sign in to the existing product App and select an accessible repository; current prototype limits | Later integration choices |
 | [Operator setup and recovery](setup.md#operator-setup-and-recovery) | Register/configure the product App, reuse existing configuration, update local/hosted credentials | Later integration choices |
+| [Connected repository automation](automation.md) | Public availability, per-feature consent, durable discovery and bounded scheduling | User-requested connected repository automation |
 | [Hosting and shared storage](hosting.md) | Cloudflare/Node/Vercel builds, common PostgreSQL state, scheduler and operator prerequisites | Implementation and portability work |
 | [Deployment evidence](deployment.md) | Dated build, browser and hosted API verification | Implementation evidence |
 | [Live pilot evidence](pilot.md) | Approved real review sequence, background progression, rollback and delivery limitations | Controlled GitHub integration evidence |
@@ -26,6 +27,8 @@ This documentation reflects the uploaded `merge-foo-product-plan(1).md` and the 
 **Verified in the lab** means exercised with explicit mock fixtures. **Implemented, integration verification pending** means code exists but real account/repository behavior has not been verified end to end. **Planned** means the capability is not implemented in the connected product. Tests with intercepted API responses are not evidence of authenticated GitHub access.
 
 ## Current checkpoint
+
+Connected repository automation now uses durable discovery populated by authorized feature enrollment, rather than an operator repository list. Per-feature opt-in, explicit first starts and fresh GitHub grants remain required. See [the current automation contract](automation.md). Prior paused/pilot-only checkpoints below are historical evidence.
 
 Documentation reviewed on **2026-10-12** against the repository source and existing verification evidence.
 

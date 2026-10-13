@@ -1,5 +1,5 @@
-import type {ResourceKind,ScopeSnapshot,StateActor,StateRecord,StateStore} from './types';
-import {validateScope,validateWrite} from './types';
+import type {ResourceKind,ScopeSnapshot,StateActor,StateRecord,StateScan,StateStore} from './types';
+import {validateScope,validateWrite,validateScan} from './types';
 export type SqlQuery=(text:string,parameters:unknown[])=>Promise<Record<string,unknown>[]>;
 type Row={resource_key:string;kind:ResourceKind;version:number;document:unknown;actor_id:string;actor_login:string;updated_at:string|Date;id?:number|string};
 function record<T>(row:Row):StateRecord<T> {
@@ -19,6 +19,11 @@ export class PostgresStateStore implements StateStore {
       COALESCE((SELECT jsonb_agg(h) FROM (SELECT * FROM merge_state_audit WHERE scope=$1 AND kind=$2 ORDER BY id DESC LIMIT 100) h),'[]'::jsonb) AS history`,[scope,kind]);
     const rows=snapshot.records as Row[];const history=snapshot.history as (Row&{id:string})[];
     return {records:rows.map(r=>record<T>(r as Row)),history:history.map(r=>({...record<T>(r as Row),id:String(r.id)}))};
+  }
+  async scan<T>(scope:string,kind:ResourceKind,options:StateScan):Promise<StateRecord<T>[]> {
+    validateScope(scope);validateScan(options);
+    const rows=await this.query('SELECT * FROM merge_state WHERE scope=$1 AND kind=$2 AND resource_key>$3 ORDER BY resource_key LIMIT $4',[scope,kind,options.after??'',options.limit]);
+    return rows.map(row=>record<T>(row as Row));
   }
   async compareAndSwap<T>(scope:string,kind:ResourceKind,key:string,expectedVersion:number,value:T,actor:StateActor):Promise<StateRecord<T>|null> {
     validateWrite(scope,key,expectedVersion,value);
