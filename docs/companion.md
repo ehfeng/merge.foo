@@ -87,3 +87,9 @@ Kernel review actions and automatic progression have not been exercised live thr
 The first standalone release replaces checkout-based user setup with an installer and guided CLI. The website exposes Local companion and GitHub App choices directly at login, copyable installation/start commands, and an explicit Connect this computer handoff.
 
 The release passed 355 unit tests, all 52 browser cases, a production build, and installer smoke tests in a temporary directory without a repository or node_modules. The smoke tests cover checksum failures, quoted paths, private file permissions, upgrades, rollback and missing prerequisites. The bundled doctor command also verified the existing `ehfeng` GitHub CLI login without starting a connection or changing GitHub.
+
+## Deployment restoration 0.2.1 — 2026-10-13
+
+A later deployment from the hosted automation branch replaced the companion release with its older onboarding and omitted the CLI downloads. The restored release combines both implementations, preserves feature opt-in and hosted scheduling, and adds the bounded scan required by the companion store's updated interface.
+
+Signed-in onboarding now places **Use local companion** above the repository chooser so it is visible without scrolling on desktop and mobile. The bundled CLI is version 0.2.1; the published 0.2.0 download is retained. Verification passed 422 unit tests, 54 browser cases, the production build, and isolated installer checks. The signed-in screenshots use mocked sessions and repositories.

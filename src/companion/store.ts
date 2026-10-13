@@ -2,8 +2,8 @@ import {constants} from 'node:fs';
 import {chmod,lstat,mkdir,open,readdir,rename,unlink} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import type {ResourceKind,ScopeSnapshot,StateActor,StateAudit,StateRecord,StateStore} from '../server/state/types';
-import {validateScope,validateWrite} from '../server/state/types';
+import type {ResourceKind,ScopeSnapshot,StateActor,StateAudit,StateRecord,StateScan,StateStore} from '../server/state/types';
+import {AUTOMATION_REGISTRY_SCOPE,validateScope,validateWrite,validateScan} from '../server/state/types';
 
 type FileData={schemaVersion:1;records:Record<string,StateRecord>;history:Record<string,StateAudit[]>};
 const empty=():FileData=>({schemaVersion:1,records:{},history:{}});
@@ -33,9 +33,15 @@ export class LocalStateStore implements StateStore {
       throw new Error('Another companion owns this state directory. If it crashed, verify its process has exited before removing process.lock.');
     }
   }
-  private key(scope:string,kind:ResourceKind,key:string){validateScope(scope);kindCheck(kind);return `${scope}/${kind}/${key}`;}
+  private key(scope:string,kind:ResourceKind,key:string){validateScope(scope);if(scope===AUTOMATION_REGISTRY_SCOPE)throw new Error('Invalid GitHub user/repository state scope.');kindCheck(kind);return `${scope}/${kind}/${key}`;}
   async read<T>(scope:string,kind:ResourceKind,key:string):Promise<StateRecord<T>|null>{await this.tail;return structuredClone(this.data.records[this.key(scope,kind,key)]??null) as StateRecord<T>|null;}
   async list<T>(scope:string,kind:ResourceKind):Promise<ScopeSnapshot<T>>{await this.tail;const prefix=this.key(scope,kind,'');return structuredClone({records:Object.entries(this.data.records).filter(([key])=>key.startsWith(prefix)).map(([,value])=>value),history:this.data.history[`${scope}/${kind}`]??[]}) as ScopeSnapshot<T>;}
+  async scan<T>(scope:string,kind:ResourceKind,options:StateScan):Promise<StateRecord<T>[]>{
+    validateScan(options);const prefix=this.key(scope,kind,'');await this.tail;
+    const records=Object.entries(this.data.records).filter(([key])=>key.startsWith(prefix)).map(([,value])=>value)
+      .filter(record=>record.key>(options.after??'')).sort((left,right)=>left.key<right.key?-1:left.key>right.key?1:0).slice(0,options.limit);
+    return structuredClone(records) as StateRecord<T>[];
+  }
   compareAndSwap<T>(scope:string,kind:ResourceKind,key:string,expectedVersion:number,value:T,actor:StateActor):Promise<StateRecord<T>|null>{
     const operation=this.tail.then(async()=>{
       if(this.closed)throw new Error('Companion state is closed.');validateWrite(scope,key,expectedVersion,value);const id=this.key(scope,kind,key);const previous=this.data.records[id];if((previous?.version??0)!==expectedVersion)return null;

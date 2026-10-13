@@ -39,6 +39,8 @@ docs/screenshots/*
 !docs/screenshots/companion-login-choice-mobile.png
 !docs/screenshots/companion-install-setup.png
 !docs/screenshots/companion-install-setup-mobile.png
+!docs/screenshots/companion-signed-in-onboarding.png
+!docs/screenshots/companion-signed-in-onboarding-mobile.png
 
 next-env.d.ts
 

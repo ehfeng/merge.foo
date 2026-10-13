@@ -25,12 +25,9 @@ export async function appJwt(issuer:string,pem:string,now=Date.now()):Promise<st
   const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(encoded));
   return `${encoded}.${base64url(new Uint8Array(signature))}`;
 }
-export function backgroundScopeConfigured(repo:Repo){
-  try{const scopes=JSON.parse(process.env.WORKFLOW_REPOSITORIES??'[]');return Array.isArray(scopes)&&scopes.some(s=>s.id===repo.id&&s.installationId===repo.installationId&&typeof s.full_name==='string'&&s.full_name.toLowerCase()===repo.full_name.toLowerCase());}catch{return false;}
-}
-export function backgroundConfigured(repo?:Repo){
-  if(!(process.env.GITHUB_APP_PRIVATE_KEY&&(process.env.GITHUB_APP_ID||process.env.GITHUB_CLIENT_ID)&&(process.env.GITHUB_WEBHOOK_SECRET?.length??0)>=32&&(process.env.WORKFLOW_RECONCILE_SECRET?.length??0)>=32))return false;
-  return !repo||backgroundScopeConfigured(repo);
+/** Operator readiness is shared by every connected repository; GitHub grants remain repo scoped. */
+export function backgroundConfigured(_repo?:Repo){
+  return !!(process.env.GITHUB_APP_PRIVATE_KEY&&(process.env.GITHUB_APP_ID||process.env.GITHUB_CLIENT_ID)&&(process.env.GITHUB_WEBHOOK_SECRET?.length??0)>=32&&(process.env.WORKFLOW_RECONCILE_SECRET?.length??0)>=32);
 }
 export async function installationPrincipal(repo:Repo):Promise<{token:string;bot:Identity}> {
   if(!Number.isSafeInteger(repo.id)||repo.id<=0||!Number.isSafeInteger(repo.installationId)||repo.installationId<=0)throw new AccessError('Invalid installation scope.',400);
@@ -39,15 +36,16 @@ export async function installationPrincipal(repo:Repo):Promise<{token:string;bot
   const jwt=await appJwt(issuer,pem);
   const app=await github<{id:number;slug:string}>(jwt,'/app');
   if(!app.slug||!Number.isSafeInteger(app.id)||app.id<=0)throw new AccessError('GitHub App identity could not be verified.',503);
-  const installation=await github<{id:number;suspended_at:string|null;app_id:number}>(jwt,`/app/installations/${repo.installationId}`);
-  if(installation.id!==repo.installationId||installation.app_id!==app.id||installation.suspended_at)throw new AccessError('The GitHub App installation is unavailable.');
+  const installation=await github<{id:number;suspended_at:string|null;app_id:number;permissions?:{pull_requests?:string}}>(jwt,`/app/installations/${repo.installationId}`);
+  if(installation.id!==repo.installationId||installation.app_id!==app.id||installation.suspended_at||installation.permissions?.pull_requests!=='write')throw new AccessError('The GitHub App installation is unavailable.');
   const response=await fetch(`https://api.github.com/app/installations/${repo.installationId}/access_tokens`,{method:'POST',headers:{Authorization:`Bearer ${jwt}`,Accept:'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2026-03-10','User-Agent':'merge.foo'},cache:'no-store',signal:AbortSignal.timeout(15000),body:JSON.stringify({repository_ids:[repo.id],permissions:{pull_requests:'write',checks:'read',statuses:'read',metadata:'read'}})});
   if(!response.ok)throw new AccessError('GitHub did not grant the scoped review permissions. Check the App installation.',503);
   const result=await response.json() as {token?:string;expires_at?:string;permissions?:{pull_requests?:string}};
   const expiry=typeof result.expires_at==='string'?Date.parse(result.expires_at):NaN;
   if(typeof result.token!=='string'||!result.token||result.token.length>4096||result.permissions?.pull_requests!=='write'||!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+3660000)throw new AccessError('GitHub returned an unusable installation token.',503);
-  const current=await github<{id:number;full_name:string}>(result.token,`/repos/${repo.full_name}`);
-  if(current.id!==repo.id||current.full_name.toLowerCase()!==repo.full_name.toLowerCase())throw new AccessError('Repository identity changed. Reconnect before enabling review.');
+  const current=await github<{id:number;full_name:string;archived:boolean}>(result.token,`/repos/${repo.full_name}`);
+  if(current.id!==repo.id||typeof current.full_name!=='string'||current.full_name.toLowerCase()!==repo.full_name.toLowerCase())throw new AccessError('Repository identity changed. Reconnect before enabling review.');
+  if(current.archived!==false)throw new AccessError('The repository is archived or its current status could not be verified.');
   const bot=await github<{id:number;login:string;type:string}>(result.token,`/users/${encodeURIComponent(`${app.slug}[bot]`)}`);
   if(!Number.isSafeInteger(bot.id)||bot.id<=0||bot.type!=='Bot'||typeof bot.login!=='string'||bot.login.toLowerCase()!==`${app.slug}[bot]`.toLowerCase())throw new AccessError('GitHub App bot identity could not be verified.',503);
   return {token:result.token,bot:{id:String(bot.id),login:bot.login}};

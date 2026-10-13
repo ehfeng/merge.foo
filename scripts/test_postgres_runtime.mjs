@@ -19,8 +19,8 @@ const schema=`fixture_${crypto.randomUUID().replaceAll('-','')}`;
 let pool;
 try {
   const compiled=join(temp,'postgres.mjs');
-  await build({stdin:{contents:`export {PostgresStateStore} from './src/server/state/postgres.ts';export {workflowStore} from './src/server/state/workflow.ts';export {WorkflowService} from './src/workflow/service.ts';`,resolveDir:fileURLToPath(new URL('../',import.meta.url))},bundle:true,format:'esm',platform:'node',packages:'external',outfile:compiled});
-  const {PostgresStateStore,workflowStore,WorkflowService}=await import(pathToFileURL(compiled).href);
+  await build({stdin:{contents:`export {PostgresStateStore} from './src/server/state/postgres.ts';export {workflowStore} from './src/server/state/workflow.ts';export {WorkflowService} from './src/workflow/service.ts';export {registerAutomationRepository,findAutomationRepository,claimNextAutomationRepository} from './src/server/automation-registry.ts';export {AUTOMATION_REGISTRY_SCOPE} from './src/server/state/types.ts';`,resolveDir:fileURLToPath(new URL('../',import.meta.url))},bundle:true,format:'esm',platform:'node',packages:'external',outfile:compiled});
+  const {PostgresStateStore,workflowStore,WorkflowService,registerAutomationRepository,findAutomationRepository,claimNextAutomationRepository,AUTOMATION_REGISTRY_SCOPE}=await import(pathToFileURL(compiled).href);
   pool=new Pool({connectionString:connection});
   await pool.query(`CREATE SCHEMA ${schema}`);await pool.end();
   const open=()=>new Pool({connectionString:connection,options:`-c search_path=${schema}`,max:10});
@@ -44,6 +44,17 @@ try {
   const plan={prId:'PR_fixture',reviewerIds:['sam'],reviewerIdentities:[{id:'42',login:'sam'}],version:1,actor:'alice',actorId:'1',updatedAt:'2026-10-12T12:00:00Z'};
   await store.compareAndSwap(scope,'plan','PR_fixture',0,plan,actor);
   assert.deepEqual((await store.list(scope,'plan')).records[0].value,plan);
+  // Discovery is internal metadata in the same provider-neutral store, with bounded SQL keyset scans.
+  const repositories=Array.from({length:7},(_,index)=>({id:index+1,installationId:900,full_name:`fixture/repo-${index+1}`,private:false}));
+  assert.equal(await findAutomationRepository(store,repositories[0]),null);
+  for(const repository of repositories)await registerAutomationRepository(store,repository,actor);
+  await registerAutomationRepository(store,repositories[0],actor);
+  assert.equal((await store.read(AUTOMATION_REGISTRY_SCOPE,'job','repository:900:1')).version,1,'registration retry is idempotent');
+  assert.deepEqual((await store.scan(AUTOMATION_REGISTRY_SCOPE,'job',{after:'repository:900:1',limit:2})).map(row=>row.key),['repository:900:2','repository:900:3']);
+  await assert.rejects(store.scan(AUTOMATION_REGISTRY_SCOPE,'job',{limit:101}),/bounded state scan/);
+  const selected=await Promise.all([claimNextAutomationRepository(store),claimNextAutomationRepository(store)]);
+  assert.deepEqual(selected.map(result=>result.repo.id).sort(),[1,2],'concurrent registry cursor claims choose consecutive repositories');
+  const registryCursor=(await store.read(AUTOMATION_REGISTRY_SCOPE,'workflow','scheduler-cursor')).value;
   await pool.end();pool=undefined;
   // Optional actual server restart, restricted to the root's dedicated temporary fixture cluster.
   if(process.env.TEST_PG_DATA==='/private/tmp/mergefoo-pg-pilot') {
@@ -53,6 +64,9 @@ try {
   assert.deepEqual((await store.read(scope,'workflow','repository')).value,winning,'generation/claim survive PostgreSQL restart');
   assert.equal((await store.list(scope,'workflow')).history.length,2);
   assert.equal((await store.read(scope,'inbox','delivery-1')).value.event,'review');
+  assert.deepEqual(await findAutomationRepository(store,repositories[0]),repositories[0],'registry membership survives PostgreSQL restart');
+  assert.deepEqual((await store.read(AUTOMATION_REGISTRY_SCOPE,'workflow','scheduler-cursor')).value,registryCursor,'fair scheduler cursor survives PostgreSQL restart');
+  for(const id of [3,4,5,6,7,1])assert.equal((await claimNextAutomationRepository(store)).repo.id,id,'registry selection wraps in fair key order');
   // Exercise the actual workflow service against SQL, using only a fake external transport.
   const workflowScope='9:6';const observedAt='2026-10-12T12:00:00Z';
   const observation={scope:workflowScope,repository:'fixture/repo',observedAt,complete:true,prs:['1','2','3'].map((id,index)=>({id,number:index+1,stackId:'feature',parentId:index?String(index):undefined,author:actor,lifecycle:'open',readiness:'draft',topologyVerified:true,githubGate:'none',reviewsComplete:true,requestsComplete:true,reviews:[],requests:[],plannedReviewers:[{id:'42',login:'sam'}]}))};
@@ -82,7 +96,7 @@ try {
   await resumed.reconcile(workflowScope,observation);await resumed.runNext(workflowScope,transport,'restart');await resumed.runNext(workflowScope,transport,'restart');
   assert.equal(observation.prs[1].requests.length,0);assert.equal(observation.prs[1].readiness,'draft');
   assert.ok((await resumed.read(workflowScope)).releases['2'].rolledBack);
-  console.log('PostgreSQL fixture passed: atomic CAS/audit, concurrent claim fencing, scope isolation, inbox deduplication, shared plans, restart persistence and real service release/rollback with fake effects.');
+  console.log('PostgreSQL fixture passed: atomic CAS/audit, concurrent claim fencing, scope isolation, inbox deduplication, shared plans, restart persistence, dynamic repository registry with bounded keyset scans/fair concurrent cursor claims, and real service release/rollback with fake effects.');
 } finally {
   if(pool){await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await pool.end();}
   await rm(temp,{recursive:true,force:true});

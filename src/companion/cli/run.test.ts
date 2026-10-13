@@ -1,4 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
+import {COMPANION_VERSION} from '../version';
 import {runCli,type CliDependencies} from './run';
 import {SetupError} from './github';
 import type {Terminal} from './terminal';
@@ -83,7 +84,7 @@ describe('standalone noninteractive commands',()=>{
     const {deps}=setup();deps.nodeVersion='18.0.0';
     await runCli(['--help'],deps);await runCli(['--version'],deps);
     expect(deps.output).toHaveBeenCalledWith(expect.stringContaining('mergefoo connect'));
-    expect(deps.output).toHaveBeenCalledWith('mergefoo 0.2.0\n');expect(deps.github.installed).not.toHaveBeenCalled();expect(deps.create).not.toHaveBeenCalled();
+    expect(deps.output).toHaveBeenCalledWith(`mergefoo ${COMPANION_VERSION}\n`);expect(deps.github.installed).not.toHaveBeenCalled();expect(deps.create).not.toHaveBeenCalled();
   });
   it('doctor reads account and explicit repository access without starting or changing anything',async()=>{
     const {deps,github,ui}=setup();await runCli(['doctor','--repo','kernel/kernel'],deps);

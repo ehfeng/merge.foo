@@ -23,12 +23,13 @@ it('uses explicit native configuration and persists before ACK without GitHub re
   const records=new Map<string,unknown>();const calls:string[]=[];
   const binding={idFromName:(scope:string)=>{calls.push(scope);return scope;},get:()=>({fetch:async(input:Request)=>{
     const operation=await input.json() as {operation:string;key:string;value:unknown;expectedVersion:number};
+    if(operation.operation==='read'&&operation.key==='repository:7:42')return Response.json({kind:'job',key:operation.key,version:1,value:{id:42,installationId:7,full_name:'owner/repo',private:false}});
     if(operation.operation==='read')return Response.json(records.get(operation.key)??null);
     const record={key:operation.key,kind:'inbox',version:operation.expectedVersion+1,value:operation.value};records.set(operation.key,record);return Response.json(record);
   }})};
   const response=await nativeWebhookIngress(await request(),{GITHUB_WEBHOOK_SECRET:secret,WORKFLOW_REPOSITORIES:scopes,PLANNED_ASSIGNMENTS:binding});
   expect(response?.status).toBe(202);expect(response?.headers.get('Cache-Control')).toContain('no-store');
-  expect(records.size).toBe(1);expect(calls.every(scope=>scope==='7:42')).toBe(true);expect(network).not.toHaveBeenCalled();expect(postgres.query).not.toHaveBeenCalled();
+  expect(records.size).toBe(1);expect(calls).toContain('automation-registry');expect(calls.filter(scope=>scope==='7:42')).toHaveLength(2);expect(network).not.toHaveBeenCalled();expect(postgres.query).not.toHaveBeenCalled();
 });
 it('honors the explicit PostgreSQL selection and fails without acknowledging missing persistence',async()=>{
   const binding={idFromName:vi.fn(),get:vi.fn()};
