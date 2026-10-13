@@ -1,0 +1,79 @@
+{
+  "checked": "2026-10-11",
+  "source": "Cloudflare Wrangler real-time tail; sanitized to omit headers, IPs, location, cookies and credentials",
+  "browser": "Chrome on this Mac",
+  "probeCookies": "omitted",
+  "cacheControlCheck": "Every browser probe response included no-store",
+  "events": [
+    {
+      "url": "https://merge-foo.eric.workers.dev/",
+      "status": 200,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "59ada898-50cf-4e9c-a780-f5655dd5bee6"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/session",
+      "status": 200,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "59ada898-50cf-4e9c-a780-f5655dd5bee6"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/",
+      "status": 200,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/session",
+      "status": 200,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/github/repositories",
+      "status": 401,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/github/workspace?repository=fixture%2Frepo",
+      "status": 401,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/session",
+      "status": 200,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/session",
+      "status": 200,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/github/repositories",
+      "status": 401,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    },
+    {
+      "url": "https://merge-foo.eric.workers.dev/api/github/workspace?repository=fixture%2Frepo",
+      "status": 401,
+      "outcome": "ok",
+      "exceptions": 0,
+      "version": "95951fcc-8187-411f-bb59-68b122dac8cb"
+    }
+  ]
+}
