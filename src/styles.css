@@ -201,8 +201,108 @@
 .coordination-feature{display:grid;gap:8px;padding-top:12px;border-top:1px solid #e7e2ed}
 .review-preview{display:grid;gap:10px;padding:12px;background:#f5f2fa;border:1px solid #ded7ec;border-radius:10px;font-size:12px;line-height:1.55}
 .review-preview p{margin:0}.coordination-check{display:flex;gap:8px;align-items:center}
-.companion-connection{display:grid;gap:9px;margin:16px 0;padding-top:15px;border-top:1px solid #edeaf1;font-size:11px;color:#887498;line-height:1.65}
-.companion-connection>strong{display:flex;align-items:center;gap:7px}.companion-connection p{margin:0}.companion-start{justify-content:center;width:100%}
-.companion-instructions{display:grid;gap:9px}.companion-instructions code{display:block;padding:9px 11px;border:1px solid #e6dfef;border-radius:7px;background:#f7f4fa;font-size:10px;color:#655471;white-space:pre-wrap;overflow-wrap:anywhere}
-.companion-instructions label{display:grid;gap:5px}.companion-instructions input{width:100%;min-width:0;padding:9px;border:1px solid #ded9e7;border-radius:7px;background:#fff;font:inherit}.companion-instructions small{font-size:9px;color:#a392b1}
-.map-connect-card:has(.companion-instructions){max-height:calc(100dvh - 120px);overflow:auto}.map-app .setup-modal{max-height:calc(100dvh - 60px);overflow:auto}
+/* Connection choices and the local companion's terminal-to-browser handoff. */
+.map-connect-card{width:640px;max-height:calc(100dvh - 120px);overflow:auto;padding:32px;scrollbar-width:thin}
+.map-connect-card h1{font-size:34px;color:#574b65}
+.map-connect-intro{color:#84778f;font-size:12px;line-height:1.8;margin-top:12px}
+.connection-heading{font-size:12px;font-weight:600;color:#81728f;margin:25px 0 12px}
+.connection-options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.connection-choice{display:flex;flex-direction:column;align-items:flex-start;gap:0;border:1px solid #e5e1eb;border-radius:13px;padding:19px;background:#fff;min-width:0;color:#70647c;line-height:1.65}
+.connection-choice-heading{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;margin-bottom:16px}
+.connection-choice-icon{display:grid;place-items:center;width:38px;height:38px;border:1px solid #e9e3ef;border-radius:10px;background:#f7f4fb;color:#8268a5}
+.connection-choice-label{font-size:7px;font-weight:650;letter-spacing:.8px;color:#a08dab}
+.connection-choice h3{font-size:15px;font-weight:600;letter-spacing:-.25px;color:#675576}
+.connection-choice p{font-size:11px;line-height:1.65;margin:8px 0 17px;color:#8c7e99}
+.connection-choice .button{width:100%;margin-top:auto;font-size:11px;min-height:35px;border-radius:7px}
+.connection-choice small{font-size:9px;color:#a091ac;margin-top:11px;white-space:nowrap}
+.connection-choice .connection-manage{font-size:9px;margin:9px 0 0;color:#89709e;line-height:1.5}
+.connection-choice .connection-unavailable{margin:auto 0 0;font-size:10px;min-height:35px;display:flex;align-items:center;color:#9a899f}
+.companion-choice{border-color:#dcd3e8;background:linear-gradient(135deg,#fbf9fd,#fff);box-shadow:0 2px 10px #5f407608}
+.companion-connection{margin:0;font-size:11px;line-height:1.65;color:#82718f}
+.connection-options:has(.companion-instructions){grid-template-columns:1fr}
+.connection-options:has(.companion-instructions)>.hosted-choice{display:none}
+.companion-instructions{display:grid;gap:16px;padding:20px;border:1px solid #e3ddec;border-radius:13px;background:#fcfafe}
+.companion-back{justify-self:start;margin:-5px 0 0 -4px;color:#9984ac;font-size:10px}
+.companion-setup-heading{display:flex;gap:12px;align-items:center;color:#9982b3}
+.companion-setup-heading h2{margin:0;font-size:16px;font-weight:550;letter-spacing:-.3px;color:#675576}
+.companion-setup-heading p{font-size:10px;color:#96849f;margin-top:3px;line-height:1.6}
+.companion-steps{list-style:none;display:grid;gap:19px;margin:2px 0 0;padding:0}
+.companion-steps li{display:flex;align-items:flex-start;gap:12px}
+.companion-step-number{display:grid;place-items:center;flex-shrink:0;width:24px;height:24px;background:#eee7f6;color:#997eb1;border-radius:50%;font-size:11px;font-weight:600}
+.companion-steps li>div{flex:1;min-width:0}
+.companion-steps h3{font-size:12px;font-weight:600;color:#786486;line-height:24px}
+.companion-steps p{font-size:10px;line-height:1.6;color:#9686a0;margin:2px 0 8px}
+.companion-command{display:flex;align-items:center;border:1px solid #e5dfed;border-radius:8px;background:white;padding:10px 10px 10px 12px;gap:10px;min-width:0}
+.companion-command code{font-size:10px;color:#6e5a7c;white-space:pre-wrap;overflow-wrap:anywhere;background:none;padding:0;flex:1;line-height:1.8;min-width:0;user-select:all}
+.companion-command button{flex-shrink:0;color:#a18bae;padding:5px}
+.companion-setup-note{display:flex;align-items:flex-start;gap:9px;color:#ae95c0;padding-top:13px;border-top:1px solid #eae4f0}
+.companion-setup-note svg{margin-top:2px}
+.companion-setup-note p{font-size:10px;line-height:1.7;color:#94809f}
+.companion-setup-note strong{font-weight:550;color:#7f648e}
+.companion-prerequisites{font-size:9px;color:#a492ae;line-height:1.8;margin-top:-4px}
+.companion-manual-toggle{justify-self:start;font-size:9px;color:#9a80ad;margin:-5px 0 -3px -4px;white-space:normal;text-align:left}
+.companion-manual{display:grid;gap:10px;width:100%;padding-top:8px}
+.companion-manual label{display:grid;gap:5px;font-size:10px;color:#907b9e}
+.companion-manual input{width:100%;min-width:0;padding:10px;border:1px solid #ded7e8;border-radius:7px;background:#fff;font:inherit;color:#655274}
+.companion-manual p{font-size:10px;color:#b08873}
+.companion-manual .button{width:100%;margin:0}
+.companion-ready{text-align:center;display:grid;justify-items:center;gap:15px;padding:27px 12px 24px;margin:22px 0 0;border:1px solid #e2daeb;border-radius:13px;background:linear-gradient(135deg,#faf7fd,#fff)}
+.companion-ready-icon{display:grid;place-items:center;width:54px;height:54px;border-radius:50%;background:#eef5f1;color:#8aaa95;margin-bottom:2px}
+.companion-ready h2{font-size:20px;font-weight:550;letter-spacing:-.5px;color:#6c577b}
+.companion-ready p{font-size:11px;line-height:1.8;max-width:300px;color:#93819f}
+.companion-ready .button{width:100%;max-width:300px;margin:0;min-height:39px}
+.companion-ready small{font-size:10px;line-height:1.8;color:#a693b1}
+.companion-connected{display:grid;gap:12px;border:1px solid #e5deed;border-radius:11px;background:#fcfafe;padding:16px;margin-top:16px}
+.companion-connected-title{display:flex;align-items:center;gap:7px}
+.companion-status-dot.offline{background:#bdacb9}.companion-status-dot.connecting{background:#c8b68e}
+.companion-status-dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;background:#9bb5a4}
+.companion-connected-title strong{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:550;color:#8a7599}
+.companion-connected-title>span:last-child{margin-left:auto;font-size:7px;letter-spacing:.7px;color:#ac98b9}
+.companion-connected>p{font-size:10px;color:#9c87aa;line-height:1.7}
+.companion-connected-actions{display:flex;flex-wrap:wrap;gap:4px 8px}
+.companion-connected-actions .text-button{font-size:9px;padding:2px 0;color:#987cab}
+.companion-inline{margin-top:16px;padding:16px}
+.companion-inline .connection-choice-heading{margin-bottom:8px}
+.companion-inline .connection-choice-icon{width:30px;height:30px;border-radius:8px}
+.companion-inline h3{font-size:13px}
+.companion-inline p{margin:6px 0 10px;font-size:10px}
+.companion-inline .button{align-self:flex-start;width:auto;padding:8px 11px;margin:0;font-size:10px}
+.companion-inline small{margin-top:8px}
+.onboarding-lab{padding-top:19px;margin-top:21px;border-top:1px solid #ede8f1}
+.map-connect-card .lab-link{font-size:10px;color:#93809f;padding-bottom:4px;border:0}
+.map-connect-card .lab-link-note{font-size:9px;color:#b19fc0;margin-top:5px}
+.map-connect-card .connect-card{margin-bottom:0}
+.map-connect-card .connect-card p{color:#9a84aa;line-height:1.7}
+.setup-app-route{margin-top:18px;padding-top:17px;border-top:1px solid #ede7f2}
+.setup-app-route>strong{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:550;color:#9980ab}
+.setup-app-route>p{font-size:10px;color:#b097bf;line-height:1.8;margin-top:7px}
+.map-app .setup-modal{max-height:calc(100dvh - 60px);overflow:auto}
+@media(max-width:760px){
+ .map-connect-card{width:calc(100% - 32px);padding:23px;max-height:calc(100dvh - 120px)}
+ .map-connect-card h1{font-size:28px}
+ .connection-heading{margin-top:21px}
+ .connection-options{grid-template-columns:1fr;gap:10px}
+ .connection-choice{position:relative;padding:15px 16px}
+ .connection-choice-heading{margin-bottom:8px}
+ .connection-choice-icon{width:31px;height:31px;border-radius:8px}
+ .connection-choice h3{font-size:14px}
+ .connection-choice p{font-size:10px;margin:5px 0 12px;line-height:1.6}
+ .connection-choice small{margin-top:8px;font-size:8px}
+ .connection-choice .button{min-height:33px;font-size:10px}
+ .connection-choice .connection-manage{font-size:8px;margin-top:7px}
+ .companion-instructions{padding:15px;gap:14px}
+ .companion-setup-heading{gap:9px;align-items:flex-start}
+ .companion-setup-heading>svg{width:19px;margin-top:3px}
+ .companion-setup-heading h2{margin:0;font-size:15px;line-height:1.4}
+ .companion-steps li{gap:9px}
+ .companion-command{padding:8px 7px 8px 9px;gap:5px}
+ .companion-command code{font-size:9px}
+ .companion-step-number{width:21px;height:21px;font-size:10px}
+ .companion-steps h3{line-height:21px;font-size:11px}
+ .companion-ready{padding:22px 16px}
+ .companion-ready h2{font-size:19px}
+ .companion-ready p{font-size:10px}
+ .companion-ready small{font-size:9px}
+ .onboarding-lab{margin-top:18px;padding-top:14px}
+ .companion-inline .button{width:auto}
+}

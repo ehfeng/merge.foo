@@ -24,13 +24,14 @@ Open **http://127.0.0.1:3000**. The current integration reads GitHub through the
 
 Use **Explore the interaction lab**, or `http://127.0.0.1:3000/?lab=1`, to try the prototype with explicit mock data. Lab state persists locally and can be reset. Real PR data is never stored in localStorage.
 
-To use the website with your existing GitHub CLI access, start the companion from this checkout and open its printed pairing URL:
+To connect with your existing GitHub CLI access, install the standalone companion and follow its guided setup. No checkout or package manager is required:
 
 ```sh
-pnpm companion --repo kernel/your-repository
+curl -fsSL https://merge.foo/install.sh | sh
+~/.local/bin/mergefoo connect
 ```
 
-Replace the example with the repository you want to allow. Keep the helper running; allow the browser's local network permission when prompted. Credentials stay with `gh`, and companion plans stay on this computer. See [companion setup, review actions and limitations](docs/companion.md).
+The CLI checks sign-in, lets you choose repositories, and opens the browser. Credentials and personal plans stay on this computer. Node.js 22+ and GitHub CLI are prerequisites; the installer explains any missing setup. See [companion setup and review actions](docs/companion.md).
 
 A read-only companion smoke test loaded all 339 open PRs in private `kernel/kernel` in about 50 seconds and fetched reviewer suggestions separately for a selected PR. Large maps have a 120-second request deadline. No GitHub review actions were sent during this check; see [verified companion evidence](docs/companion.md#verified-evidence--2026-10-12).
 

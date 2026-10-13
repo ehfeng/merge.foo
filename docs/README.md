@@ -12,7 +12,7 @@ This documentation reflects the uploaded `merge-foo-product-plan(1).md` and the 
 | [Roadmap and open decisions](roadmap.md) | Original milestones, current progress, unresolved choices | Sections 8, 10 |
 | [Architecture](architecture.md) | Current code structure and proposed production architecture | Section 7 plus later stack choices |
 | [Normal user onboarding](setup.md#normal-user-onboarding) | Sign in to the existing product App and select an accessible repository; current prototype limits | Later integration choices |
-| [Local GitHub CLI companion](companion.md) | Pair the browser with your existing `gh` access, select repositories, and keep plans/workflows locally | User's organization-access requirement |
+| [Local GitHub CLI companion](companion.md) | Install the standalone CLI, choose repositories with guided setup, and keep plans/workflows locally | User's organization-access requirement |
 | [Operator setup and recovery](setup.md#operator-setup-and-recovery) | Register/configure the product App, reuse existing configuration, update local/hosted credentials | Later integration choices |
 | [Hosting and shared storage](hosting.md) | Cloudflare/Node/Vercel builds, common PostgreSQL state, scheduler and operator prerequisites | Implementation and portability work |
 | [Deployment evidence](deployment.md) | Dated build, browser and hosted API verification | Implementation evidence |

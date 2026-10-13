@@ -9,15 +9,15 @@
   },
   "scripts": {
     "dev": "vite dev --host 127.0.0.1 --port 3000",
-    "build": "tsc --noEmit && vite build",
-    "build:companion": "vite build --config vite.companion.config.ts",
+    "build": "pnpm build:companion && tsc --noEmit && vite build",
+    "build:companion": "node scripts/build_companion_distribution.mjs",
     "companion": "node scripts/companion.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:browser": "playwright test",
-    "verify": "pnpm typecheck && pnpm test && pnpm test:setup && pnpm test:storage && pnpm build && pnpm test:browser",
+    "verify": "pnpm typecheck && pnpm test && pnpm test:setup && pnpm test:storage && pnpm build && pnpm test:companion-distribution && pnpm test:browser",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "deploy": "wrangler deploy --config dist/server/wrangler.json",
     "deploy:check": "wrangler deploy --config dist/server/wrangler.json --dry-run",
@@ -37,7 +37,8 @@
     "test:postgres": "node scripts/test_postgres_runtime.mjs",
     "workflow:reconcile": "node scripts/reconcile_workflows.mjs",
     "test:host:vercel": "node scripts/test_host_runtime.mjs vercel",
-    "test:webhook": "node scripts/test_webhook_runtime.mjs"
+    "test:webhook": "node scripts/test_webhook_runtime.mjs",
+    "test:companion-distribution": "node scripts/test_companion_distribution.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
@@ -50,6 +51,7 @@
     "vinext": "latest"
   },
   "devDependencies": {
+    "@clack/prompts": "^1.8.1",
     "@cloudflare/vite-plugin": "1",
     "@playwright/test": "^1.58.0",
     "@types/node": "latest",

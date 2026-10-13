@@ -35,6 +35,10 @@ docs/screenshots/*
 !docs/screenshots/companion-onboarding-mobile.png
 !docs/screenshots/companion-connected.png
 !docs/screenshots/companion-connected-mobile.png
+!docs/screenshots/companion-login-choice.png
+!docs/screenshots/companion-login-choice-mobile.png
+!docs/screenshots/companion-install-setup.png
+!docs/screenshots/companion-install-setup-mobile.png
 
 next-env.d.ts
 
@@ -42,3 +46,7 @@ __pycache__/
 
 # Local companion plans and workflow history are private to this computer.
 .mergefoo-companion/
+
+# Published companion downloads are generated with each application build.
+public/install.sh
+public/cli/

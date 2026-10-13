@@ -4,7 +4,7 @@ The public product offers the operator-owned merge.foo GitHub App and a [local G
 
 ## Normal user onboarding
 
-For repositories where the merge.foo App cannot be installed, follow [local companion setup](companion.md). Start `pnpm companion --repo OWNER/REPOSITORY`, open its pairing URL and allow the browser's local network permission. This connection has its own local plans and workflow history. Current GitHub user permissions and organization policies still apply.
+For repositories where the merge.foo App cannot be installed, follow [local companion setup](companion.md). Install the standalone CLI with `curl -fsSL https://merge.foo/install.sh | sh`, then run `~/.local/bin/mergefoo connect` for guided sign-in and repository selection. Choose **Connect this computer** in the browser and allow local-network access. No project checkout or package manager is required. This connection has its own local plans and workflow history. Current GitHub user permissions and organization policies still apply.
 
 The GitHub App flow is:
 
