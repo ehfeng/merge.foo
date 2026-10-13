@@ -35,6 +35,10 @@ async function expectMapNodesToFit(page:Page,unobscured=false){
   }
 }
 
+async function mapCamera(page:Page){
+  return page.locator('.map-world').evaluate(element=>{const matrix=new DOMMatrixReadOnly((element as HTMLElement).style.transform);return {x:matrix.e,y:matrix.f,zoom:matrix.a};});
+}
+
 test('authenticated repository maps start with My work selected and only owned PRs',async({page})=>{
   await page.setViewportSize({width:1280,height:720});await connectedMap(page,[143,144,129],createFixture(),false);
   await expect(page.getByRole('button',{name:'My work',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.getByRole('button',{name:/^All stacks/})).toHaveAttribute('aria-pressed','false');
@@ -125,6 +129,52 @@ test('map owns the viewport and background drag preserves selection',async({page
   await page.mouse.move(710,410);await page.mouse.down();await page.mouse.move(800,450,{steps:8});await page.mouse.up();
   await expect(page.getByRole('dialog',{name:'Details for #142'})).toBeVisible();expect(await page.locator('.map-world').evaluate(e=>(e as HTMLElement).style.transform)).not.toBe(camera);
   await page.getByRole('button',{name:'Close details'}).click();await expect(page.getByTestId('pr-142').getByRole('button')).toBeFocused();
+});
+
+test('diagonal trackpad scrolling over a PR pans in screen pixels without zooming or changing selection',async({page})=>{
+  await page.setViewportSize({width:1280,height:720});await page.goto('/?lab=1');await expect(page.locator('.map-pr')).toHaveCount(9);
+  await page.getByTestId('pr-142').getByRole('button').click();await expect(page.getByRole('dialog',{name:'Details for #142'})).toBeVisible();
+  const target=await page.getByTestId('pr-143').getByRole('button').boundingBox();expect(target).not.toBeNull();
+  const cursor={x:target!.x+target!.width/2,y:target!.y+target!.height/2};
+  expect(await page.evaluate(point=>document.elementFromPoint(point.x,point.y)?.closest('.map-pr')?.getAttribute('data-pr-id'),cursor)).toBe('pr-143');
+  const before=await mapCamera(page);await page.mouse.move(cursor.x,cursor.y);await page.mouse.wheel(92,-48);
+  await expect.poll(async()=>(await mapCamera(page)).x).toBeCloseTo(before.x-92,3);await expect.poll(async()=>(await mapCamera(page)).y).toBeCloseTo(before.y+48,3);
+  expect((await mapCamera(page)).zoom).toBe(before.zoom);await expect(page.getByRole('dialog',{name:'Details for #142'})).toBeVisible();
+  await expect(page.getByTestId('pr-142').getByRole('button')).toHaveAttribute('aria-pressed','true');await expect(page.getByTestId('pr-143').getByRole('button')).toHaveAttribute('aria-pressed','false');
+  expect(await page.evaluate(()=>({x:window.scrollX,y:window.scrollY}))).toEqual({x:0,y:0});
+});
+
+test('trackpad pinch wheel zooms around the cursor while preventing browser zoom and page scrolling',async({page})=>{
+  await page.setViewportSize({width:1280,height:720});await page.goto('/?lab=1');await expect(page.locator('.map-pr')).toHaveCount(9);
+  const map=page.getByRole('region',{name:'Pull request map'}),viewport=await map.boundingBox();expect(viewport).not.toBeNull();
+  const cursor={x:viewport!.x+620,y:viewport!.y+360},anchor={x:cursor.x-viewport!.x,y:cursor.y-viewport!.y};
+  const before=await mapCamera(page),worldAnchor={x:(anchor.x-before.x)/before.zoom,y:(anchor.y-before.y)/before.zoom};
+  const browserBefore=await page.evaluate(()=>({x:window.scrollX,y:window.scrollY,width:window.innerWidth,height:window.innerHeight,scale:window.visualViewport?.scale??1}));
+  await page.evaluate(()=>{document.addEventListener('wheel',event=>{(window as typeof window&{observedWheel?:{prevented:boolean;pinch:boolean}}).observedWheel={prevented:event.defaultPrevented,pinch:event.ctrlKey};},{once:true});});
+  await page.mouse.move(cursor.x,cursor.y);await page.keyboard.down('Control');try{await page.mouse.wheel(0,-100);}finally{await page.keyboard.up('Control');}
+  await expect.poll(async()=>(await mapCamera(page)).zoom).toBeGreaterThan(before.zoom);const after=await mapCamera(page);
+  expect((anchor.x-after.x)/after.zoom).toBeCloseTo(worldAnchor.x,3);expect((anchor.y-after.y)/after.zoom).toBeCloseTo(worldAnchor.y,3);
+  expect(await page.evaluate(()=>(window as typeof window&{observedWheel?:{prevented:boolean;pinch:boolean}}).observedWheel)).toEqual({prevented:true,pinch:true});
+  expect(await page.evaluate(()=>({x:window.scrollX,y:window.scrollY,width:window.innerWidth,height:window.innerHeight,scale:window.visualViewport?.scale??1}))).toEqual(browserBefore);
+});
+
+test('two touch points can pan and pinch simultaneously while preserving selection',async({page})=>{
+  await page.setViewportSize({width:1280,height:720});await page.goto('/?lab=1');await expect(page.locator('.map-pr')).toHaveCount(9);
+  await page.getByTestId('pr-142').getByRole('button').click();await expect(page.getByRole('dialog',{name:'Details for #142'})).toBeVisible();
+  const map=page.getByRole('region',{name:'Pull request map'}),viewport=await map.boundingBox();expect(viewport).not.toBeNull();const before=await mapCamera(page);
+  const initialMidpoint={x:500,y:475},nextMidpoint={x:560,y:505},worldAnchor={x:(initialMidpoint.x-before.x)/before.zoom,y:(initialMidpoint.y-before.y)/before.zoom};
+  for(const point of [{x:viewport!.x+400,y:viewport!.y+475},{x:viewport!.x+600,y:viewport!.y+475}]){
+    expect(await page.evaluate(({x,y})=>{const target=document.elementFromPoint(x,y);return !!target?.closest('.map-surface')&&!target.closest('button,a,input,select');},point)).toBe(true);
+  }
+  const client=await page.context().newCDPSession(page);await client.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:2});
+  try{
+    await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:viewport!.x+400,y:viewport!.y+475},{id:2,x:viewport!.x+600,y:viewport!.y+475}]});
+    await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{id:1,x:viewport!.x+410,y:viewport!.y+505},{id:2,x:viewport!.x+710,y:viewport!.y+505}]});
+    await expect.poll(async()=>(await mapCamera(page)).zoom).toBeCloseTo(before.zoom*1.5,3);const after=await mapCamera(page);
+    expect((nextMidpoint.x-after.x)/after.zoom).toBeCloseTo(worldAnchor.x,3);expect((nextMidpoint.y-after.y)/after.zoom).toBeCloseTo(worldAnchor.y,3);
+  }finally{await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await client.detach();}
+  await expect(page.getByRole('dialog',{name:'Details for #142'})).toBeVisible();await expect(page.getByTestId('pr-142').getByRole('button')).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(()=>({x:window.scrollX,y:window.scrollY,scale:window.visualViewport?.scale??1}))).toEqual({x:0,y:0,scale:1});
 });
 
 test('search, attention, and review updates retain topology and camera',async({page})=>{

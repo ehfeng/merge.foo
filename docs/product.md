@@ -59,7 +59,7 @@ Use compact, consistent PR markers. Large changes should not create physically l
 
 Selecting a PR highlights upstream prerequisites and downstream dependents and opens temporary details, with a bottom drawer on mobile. Connected plans, holds, dependency corrections and explicit review previews use current permission checks. Actual effects require operator enablement and enrolled intent; the scoped pilot verified holds, progression and rollback. Repository maps open in My work, which hides other authors’ PRs and fits the remaining map; All stacks restores the full map. Refreshing preserves a chosen filter. Search and Needs attention preserve spatial context. The reader includes bounded recent merged ancestry and discloses its coverage.
 
-The lab verifies these interactions with nine PRs. Its layout is an HTML/CSS canvas with SVG connections and a topology-only layout function, not Mermaid. Branch siblings can occupy separate lanes; that rendering support is not validation of production branching automation.
+Two-finger scrolling pans the canvas horizontally and vertically. Pinching zooms around the gesture position; touch pinches can move the canvas at the same time. Ctrl/Cmd-scroll also zooms. The lab verifies these interactions with nine PRs. Its layout is an HTML/CSS canvas with SVG connections and a topology-only layout function, not Mermaid. Branch siblings can occupy separate lanes; that rendering support is not validation of production branching automation.
 
 ### Planned assignments and reviewer continuity
 

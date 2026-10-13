@@ -62,7 +62,18 @@ export default function WorkMap({workspace,selectedId,query,scope,viewerLogin,on
   useEffect(()=>{if(!size.width||!size.height)return;if(fittedTopology.current!==topology){const wasMine=fittedTopology.current.startsWith('mine:');fittedTopology.current=topology;if(scope==='mine'||wasMine)fit();else initialCamera();}},[topology,size.width,size.height]);
   useEffect(()=>{if(scope==='mine'&&selectedId&&!mapWorkspace.prs.some(pr=>pr.id===selectedId))onSelect(null);},[scope,selectedId,topology,onSelect]);
   useEffect(()=>{if(previousFitRequest.current===fitRequest)return;previousFitRequest.current=fitRequest;if(sizeRef.current.width&&sizeRef.current.height)fit(focusStackId);},[fitRequest,focusStackId]);
-  useEffect(()=>{const element=surface.current;if(!element)return;const wheel=(event:WheelEvent)=>{event.preventDefault();const rect=element.getBoundingClientRect();const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?rect.height:1);applyZoom(zoomRef.current*Math.exp(-delta*.0015),{x:event.clientX-rect.left,y:event.clientY-rect.top});};element.addEventListener('wheel',wheel,{passive:false});return()=>element.removeEventListener('wheel',wheel);},[]);
+  useEffect(()=>{
+    const element=surface.current;if(!element)return;
+    const wheel=(event:WheelEvent)=>{
+      event.preventDefault();const rect=element.getBoundingClientRect();const mode=event.deltaMode;
+      const deltaX=event.deltaX*(mode===1?16:mode===2?rect.width:1);
+      const deltaY=event.deltaY*(mode===1?16:mode===2?rect.height:1);
+      // Browsers expose trackpad pinches as Ctrl-wheel; ordinary two-finger scrolling pans.
+      if(event.ctrlKey||event.metaKey)applyZoom(zoomRef.current*Math.exp(-deltaY*.01),{x:event.clientX-rect.left,y:event.clientY-rect.top});
+      else moveCamera({x:panRef.current.x-deltaX,y:panRef.current.y-deltaY});
+    };
+    element.addEventListener('wheel',wheel,{passive:false});return()=>element.removeEventListener('wheel',wheel);
+  },[]);
 
   const related=useMemo(()=>{const current=workspace.prs.find(pr=>pr.id===selectedId);if(!current)return new Set<string>();return new Set([current.id,...ancestors(workspace,current).map(pr=>pr.id),...workspace.prs.filter(pr=>ancestors(workspace,pr).some(parent=>parent.id===current.id)).map(pr=>pr.id)]);},[workspace,selectedId]);
   const text=query.trim().toLowerCase();
@@ -78,7 +89,7 @@ export default function WorkMap({workspace,selectedId,query,scope,viewerLogin,on
   function keyboard(event:KeyboardEvent<HTMLDivElement>){if(event.ctrlKey||event.metaKey||event.altKey)return;if((event.target as HTMLElement).closest('input,select,textarea'))return;const step=event.shiftKey?180:64;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();moveCamera({x:panRef.current.x+(event.key==='ArrowLeft'?step:event.key==='ArrowRight'?-step:0),y:panRef.current.y+(event.key==='ArrowUp'?step:event.key==='ArrowDown'?-step:0)});}else if(event.key==='+'||event.key==='='){event.preventDefault();applyZoom(zoomRef.current*1.15);}else if(event.key==='-'){event.preventDefault();applyZoom(zoomRef.current/1.15);}else if(event.key==='0'||event.key==='Home'){event.preventDefault();fit();}else if(event.key.toLowerCase()==='f'){event.preventDefault();fit(prById.get(selectedId??'')?.stackId??focusStackId);}else if(event.key==='Escape'){event.preventDefault();onSelect(null);}else if(event.key==='Enter'&&event.target===surface.current&&selectedId){event.preventDefault();targets.current.get(selectedId)?.focus({preventScroll:true});}}
 
   return <div ref={surface} className={`map-surface ${dragging?'dragging':''}`} role="region" aria-label="Pull request map" aria-describedby={instructions} tabIndex={0} data-zoom={zoom.toFixed(3)} style={{position:'relative',width:'100%',height:'100%',overflow:'clip',touchAction:'none'}} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onKeyDown={keyboard} onClick={event=>{if((event.target as HTMLElement).closest('button,a,input,select'))return;if(!moved.current)onSelect(null);moved.current=false;}}>
-    <p id={instructions} className="map-instructions">Drag the background to pan. Scroll or pinch to zoom. Arrow keys pan, plus and minus zoom, Home fits all PRs, F fits the selected feature, Escape clears selection. Tab selects a PR control.</p>
+    <p id={instructions} className="map-instructions">Drag or two-finger scroll to pan. Pinch or Ctrl/Cmd-scroll to zoom. Arrow keys pan, plus and minus zoom, Home fits all PRs, F fits the selected feature, Escape clears selection. Tab selects a PR control.</p>
     <div className="map-world" style={{position:'absolute',left:0,top:0,width:geometry.bounds.x+geometry.bounds.width+80,height:geometry.bounds.y+geometry.bounds.height+80,transform:`translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,transformOrigin:'0 0',willChange:'transform'}}>
       <svg className="map-routes" width={geometry.bounds.x+geometry.bounds.width+80} height={geometry.bounds.y+geometry.bounds.height+80} aria-hidden="true" style={{position:'absolute',inset:0,overflow:'visible',pointerEvents:'none'}}>
         <defs><marker id={`map-arrow-${instructions.replaceAll(':','')}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L6 4L1 7" fill="none" stroke="currentColor" strokeWidth="1.3"/></marker></defs>
