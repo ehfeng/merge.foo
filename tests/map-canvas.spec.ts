@@ -4,13 +4,15 @@ import type {Workspace} from '../src/domain/types';
 
 test.beforeEach(async({page})=>{await page.route('**/api/session',route=>route.fulfill({json:{configured:false,authenticated:false}}));});
 
-async function connectedMap(page:Page,ownNumbers:number[]=[143,144,129],workspace:Workspace=createFixture()){
+async function connectedMap(page:Page,ownNumbers:number[]=[143,144,129],workspace:Workspace=createFixture(),allStacks=true){
   workspace.prs.forEach(pr=>{pr.author=ownNumbers.includes(pr.number)?'Alice':'colleague';pr.suggestedReviewers=[];});
   await page.route('**/api/session',route=>route.fulfill({json:{configured:true,authenticated:true,login:'alice'}}));
   await page.route('**/api/github/repositories',route=>route.fulfill({json:{repositories:[{id:1,full_name:'acme/platform',private:true}]}}));
   await page.route('**/api/github/workspace?*',route=>route.fulfill({json:{workspace,viewerLogin:'ALICE',warnings:[],coordination:{canManage:false,writesEnabled:false,backgroundEnabled:false}}}));
   await page.goto('/');await page.getByRole('combobox',{name:'Repository'}).selectOption('acme/platform');
-  await expect(page.locator('.map-pr')).toHaveCount(workspace.prs.length);
+  await expect(page.getByRole('button',{name:'My work',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.map-pr')).toHaveCount(workspace.prs.filter(pr=>pr.author.toLowerCase()==='alice').length);
+  if(allStacks){await page.getByRole('button',{name:/^All stacks/}).click();await expect(page.locator('.map-pr')).toHaveCount(workspace.prs.length);}
 }
 
 function manyOwnStacks(){
@@ -32,6 +34,14 @@ async function expectMapNodesToFit(page:Page,unobscured=false){
     expect(box!.x+box!.width).toBeLessThanOrEqual(viewport!.x+viewport!.width+1);expect(box!.y+box!.height).toBeLessThanOrEqual(viewport!.y+viewport!.height-bottom+1);
   }
 }
+
+test('authenticated repository maps start with My work selected and only owned PRs',async({page})=>{
+  await page.setViewportSize({width:1280,height:720});await connectedMap(page,[143,144,129],createFixture(),false);
+  await expect(page.getByRole('button',{name:'My work',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.getByRole('button',{name:/^All stacks/})).toHaveAttribute('aria-pressed','false');
+  for(const number of [143,144,129])await expect(page.getByTestId(`pr-${number}`)).toBeVisible();
+  await expect(page.getByTestId('pr-142')).toHaveCount(0);await expect(page.locator('.map-pr.dimmed')).toHaveCount(0);await expect(page.locator('.map-route-label')).toHaveCount(2);
+  await expect.poll(async()=>Number(await page.getByRole('region',{name:'Pull request map'}).getAttribute('data-zoom'))).toBeLessThan(1);await expectMapNodesToFit(page,true);
+});
 
 test('My work hides other authors, clears their details, and fits only the remaining PRs',async({page})=>{
   await page.setViewportSize({width:1280,height:720});await connectedMap(page);
@@ -97,8 +107,8 @@ test('search within My work preserves its compact topology and camera',async({pa
   expect(await page.locator('.map-world').evaluate(e=>(e as HTMLElement).style.transform)).toBe(camera);
 });
 
-test('My work with no authored PRs shows an empty map and restores all stacks',async({page})=>{
-  await connectedMap(page,[]);await page.getByRole('button',{name:'My work',exact:true}).click();
+test('the default My work view with no authored PRs starts empty and can show all stacks',async({page})=>{
+  await connectedMap(page,[],createFixture(),false);
   await expect(page.locator('.map-pr')).toHaveCount(0);await expect(page.locator('.map-route')).toHaveCount(0);await expect(page.locator('.map-route-label')).toHaveCount(0);
   await expect(page.locator('.map-empty')).toBeVisible();await expect(page.locator('.map-empty')).toContainText(/No .*pull requests/i);await expect(page.locator('.map-empty')).toContainText(/My work|authored|your own/i);
   const map=page.getByRole('region',{name:'Pull request map'});expect(Number.isFinite(Number(await map.getAttribute('data-zoom')))).toBe(true);

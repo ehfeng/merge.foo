@@ -26,7 +26,7 @@ export default function App() {
   const [view,setView]=useState<'graph'|'activity'|'reviewers'>('graph');const [selected,setSelectedState]=useState<string|null>(null);
   const selectedRef=useRef<string|null>(null);const setSelected=useCallback((id:string|null)=>{selectedRef.current=id;setSelectedState(id);},[]);
   const [suggestionStatus,setSuggestionStatus]=useState<{prId:string;loading:boolean;error:string}|null>(null);
-  const [query,setQuery]=useState('');const [scope,setScope]=useState<'all'|'attention'|'mine'>('all');const [zoom,setZoom]=useState(1);
+  const [query,setQuery]=useState('');const [scope,setScope]=useState<'all'|'attention'|'mine'>('mine');const [zoom,setZoom]=useState(1);
   const [tools,setTools]=useState(false);const [fitRequest,setFitRequest]=useState(0);const [focusStackId,setFocusStackId]=useState<string|null>(null);
   const [setup,setSetup]=useState(false);const [notice,setNotice]=useState('');const [resetConfirm,setResetConfirm]=useState(false);
   const requestEpoch=useRef(0);const authEpoch=useRef(0);const savingPlans=useRef(new Set<string>());const mutationEpoch=useRef(0);
@@ -39,7 +39,7 @@ export default function App() {
   function enterLab() {
     requestEpoch.current++;selectedRepository.current=null;setRepository('');setBusy(false);setCoordination(undefined);setRepoListError(false);
     let data=createFixture();try { const saved=localStorage.getItem(STORAGE_KEY);if(saved){const parsed=JSON.parse(saved) as Workspace;if(parsed.schemaVersion===1&&Array.isArray(parsed.prs)&&parsed.prs.length===9)data=parsed;}}catch{/* New fixture on corrupt storage. */}
-    setWorkspace(data);setMode('lab');setSelected(null);setView('graph');setError('');setWarnings([]);history.replaceState(null,'','?lab=1');
+    setWorkspace(data);setMode('lab');setScope('all');setSelected(null);setView('graph');setError('');setWarnings([]);history.replaceState(null,'','?lab=1');
   }
   const clearRepositoryView=useCallback(()=>{requestEpoch.current++;selectedRepository.current=null;setRepository('');setWorkspace(null);setCoordination(undefined);setSelected(null);setWarnings([]);setBusy(false);setQuery('');setView('graph');setRepoListError(false);},[]);
   const clearAuthentication=useCallback((message?:string)=>{
@@ -100,6 +100,7 @@ export default function App() {
   function fitMap(stackId:string|null=null) {setFocusStackId(stackId);setFitRequest(n=>n+1);}
   useEffect(()=>{const dismiss=(event:KeyboardEvent)=>{if(event.key!=='Escape')return;if(tools){event.stopPropagation();setTools(false);}else if(view!=='graph'){event.stopPropagation();setView('graph');document.querySelector<HTMLButtonElement>('[aria-label="Map menu"]')?.focus();}};document.addEventListener('keydown',dismiss,true);return()=>document.removeEventListener('keydown',dismiss,true);},[view,tools]);
   async function loadRepo(name:string) {
+    if(name!==repository||mode!=='live')setScope('mine');
     selectedRepository.current=repositoryList.current.find(repo=>repo.full_name===name)??null;
     const generation=++requestEpoch.current;setRepository(name);setBusy(true);setRepoListError(false);setError('');setSelected(null);setWorkspace(null);setCoordination(undefined);setMode('live');history.replaceState(null,'','/');
     try {const response=await apiFetch(`/api/github/workspace?repository=${encodeURIComponent(name)}`);if(generation!==requestEpoch.current)return;if(response.status===401){clearAuthentication();return;}const data=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(data.error);setWorkspace(data.workspace);setCoordination(data.coordination);if(data.viewerLogin)setAuth(current=>current?{...current,login:data.viewerLogin}:current);setWarnings(data.warnings??[]);}
