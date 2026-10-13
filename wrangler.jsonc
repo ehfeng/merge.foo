@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "merge-foo",
+  "compatibility_date": "2026-10-11",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "src/worker.ts",
+  "workers_dev": true,
+  "routes": [{"pattern": "merge.foo", "custom_domain": true}],
+  "vars": {
+    "APP_ORIGIN_ALIASES": "[\"https://merge.foo\",\"https://merge-foo.eric.workers.dev\"]"
+  },
+  "durable_objects": {"bindings": [{"name": "PLANNED_ASSIGNMENTS", "class_name": "PlannedAssignments"}]},
+  "migrations": [{"tag": "v1-planned-assignments", "new_sqlite_classes": ["PlannedAssignments"]}],
+  "triggers": {"crons": ["* * * * *"]},
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  }
+}
