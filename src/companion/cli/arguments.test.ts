@@ -7,6 +7,7 @@ describe('standalone companion commands',()=>{
     expect(parseCommand([])).toMatchObject({command:'connect',guided:true,options:{origin:'https://merge.foo',port:4318,repositories:[]}});
     expect(parseCommand(['connect'])).toMatchObject({command:'connect',guided:true});
     expect(parseCommand(['doctor']).command).toBe('doctor');
+    expect(parseCommand(['repair']).command).toBe('repair');
     expect(parseArguments(['--help'])).toBeNull();expect(parseCommand(['--version']).command).toBe('version');
   });
   it('preserves explicit flags without any interactive setup or duplicated access',()=>{
@@ -15,6 +16,11 @@ describe('standalone companion commands',()=>{
   });
   it('keeps guided repository selection when flags only configure the connection',()=>{
     expect(parseCommand(['connect','--origin','http://127.0.0.1:3000','--read-only','--no-open','--port','4320'])).toMatchObject({guided:true,openBrowser:false,options:{origin:'http://127.0.0.1:3000',readOnly:true,port:4320,repositories:[]}});
+  });
+  it('repairs the default or explicitly selected saved plans folder without connection options',()=>{
+    expect(parseCommand(['repair','--state-dir','a folder with spaces'])).toMatchObject({command:'repair',options:{stateDir:resolve('a folder with spaces'),repositories:[]}});
+    expect(parseCommand(['repair','--help']).command).toBe('help');
+    for(const flag of ['--repo','--origin','--port','--read-only','--no-open'])expect(()=>parseCommand(['repair',flag,'value'])).toThrow(/mergefoo repair/);
   });
   it.each([
     ['--repo'],['--repo','../../etc/passwd'],['--repo','owner/name?bad=1'],['--repo','owner/name\n'],

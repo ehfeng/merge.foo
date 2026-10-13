@@ -30,7 +30,7 @@ export class LocalStateStore implements StateStore {
       if(code(error)!=='EEXIST')throw error;
       // Automatically unlinking a stale lock can race another restart and allow
       // two writers. Fail closed; graceful shutdown removes our own lock.
-      throw new Error('Another companion owns this state directory. If it crashed, verify its process has exited before removing process.lock.');
+      throw new Error('Another companion may own this saved plans folder. Run mergefoo doctor to check its recorded process. If the lock is stale, run mergefoo repair; if it is running, stop the original companion with Ctrl+C before reconnecting.');
     }
   }
   private key(scope:string,kind:ResourceKind,key:string){validateScope(scope);if(scope===AUTOMATION_REGISTRY_SCOPE)throw new Error('Invalid GitHub user/repository state scope.');kindCheck(kind);return `${scope}/${kind}/${key}`;}

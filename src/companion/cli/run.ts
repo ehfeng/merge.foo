@@ -1,5 +1,6 @@
 import {createCompanion,type CompanionOptions} from '../server';
 import {COMPANION_VERSION} from '../version';
+import {inspectStateLock,repairStateLock,type LockInspection} from '../state-lock';
 import {CLI_HELP,parseCommand,validOwner} from './arguments';
 import {openBrowser} from './browser';
 import {createGitHub,SetupError,signInWithGitHub,type Identity,type Repository} from './github';
@@ -10,7 +11,27 @@ export type CliDependencies={
   interactive:boolean;ui:Terminal;github:ReturnType<typeof createGitHub>;
   create:(options:CompanionOptions)=>Promise<CompanionSession>;signIn:()=>Promise<void>;open:(url:string)=>Promise<boolean>;
   output:(message:string)=>void;nodeVersion:string;onReady:(session:CompanionSession)=>void|(()=>void);
+  inspectLock:(directory:string)=>Promise<LockInspection>;repairLock:(directory:string)=>Promise<LockInspection>;
 };
+
+function stateCommand(command:'connect'|'repair',args:string[],directory:string):string{
+  // Quote custom paths as one shell argument, including spaces and apostrophes.
+  return args.includes('--state-dir')?`mergefoo ${command} --state-dir '${directory.replace(/'/g,"'\\''")}'`:`mergefoo ${command}`;
+}
+
+function lockGuidance(lock:LockInspection,repair:string):string{
+  const processLabel=lock.pid===undefined?'The previous companion':`Companion process ${lock.pid}`;
+  if(lock.state==='running')return `${processLabel} is still running. Stop it with Ctrl-C in its original terminal, then reconnect. Your lock was kept.`;
+  if(lock.state==='stale')return `${processLabel} has exited, but its process lock remains.\nRun: ${repair}`;
+  if(lock.state==='unknown')return `${processLabel} could not be checked safely. ${lock.message??'Verify that it has stopped before trying again.'} Your lock was kept.`;
+  return `${lock.message??'The companion lock could not be read safely.'} Your lock was kept. Run mergefoo doctor to inspect the folder.`;
+}
+
+function showStateLock(ui:Terminal,lock:LockInspection,repair:string):void{
+  if(lock.path)ui.info(`Process lock: ${lock.path}`);
+  if(lock.state==='unlocked')ui.success('The saved plans folder is unlocked.');
+  else ui.warn(lockGuidance(lock,repair));
+}
 
 async function step<T>(ui:Terminal,message:string,done:string,operation:()=>Promise<T>):Promise<T>{
   const spinner=ui.spinner();spinner.start(message);
@@ -57,21 +78,33 @@ export async function runCli(args:string[],overrides:Partial<CliDependencies>={}
   const output=overrides.output??((message:string)=>{process.stdout.write(message);});
   if(command.command==='help'){output(CLI_HELP);return;}
   if(command.command==='version'){output(`mergefoo ${COMPANION_VERSION}\n`);return;}
-  const deps:CliDependencies={interactive:!!process.stdin.isTTY&&!!process.stdout.isTTY,ui:createTerminal(),github:createGitHub(),create:createCompanion,signIn:signInWithGitHub,open:openBrowser,output,nodeVersion:process.versions.node,onReady:()=>{},...overrides};
+  const deps:CliDependencies={interactive:!!process.stdin.isTTY&&!!process.stdout.isTTY,ui:createTerminal(),github:createGitHub(),create:createCompanion,signIn:signInWithGitHub,open:openBrowser,output,nodeVersion:process.versions.node,onReady:()=>{},inspectLock:inspectStateLock,repairLock:repairStateLock,...overrides};
   if(Number(deps.nodeVersion.split('.')[0])<22)throw new SetupError('merge.foo needs Node.js 22 or newer. Install the current LTS from https://nodejs.org, then try again.');
   const guided=command.command==='connect'&&command.guided&&deps.interactive;
   if(command.command==='connect'&&!guided&&!command.options.repositories.length)throw new SetupError('Choose a repository: mergefoo connect --repo owner/name\nFor guided setup, run mergefoo connect in an interactive terminal.');
-  deps.ui.intro(`merge.foo · ${command.command==='doctor'?'setup check':'local connection'}`);
+  deps.ui.intro(`merge.foo · ${command.command==='doctor'?'setup check':command.command==='repair'?'state repair':'local connection'}`);
   let session:CompanionSession|undefined;
   const lifecycle:{removeStopHandlers?:()=>void}={};
   try{
+    let doctorLock:LockInspection|undefined;
+    if(command.command==='doctor'||command.command==='repair'){
+      deps.ui.info(`Saved plans folder: ${command.options.stateDir}`);
+      const repair=stateCommand('repair',args,command.options.stateDir!);
+      if(command.command==='repair'){
+        const lock=await step(deps.ui,'Checking the companion process lock…','Process lock checked.',()=>deps.repairLock(command.options.stateDir!));
+        if(lock.state!=='unlocked')throw new SetupError(lockGuidance(lock,repair));
+        deps.ui.success('The saved plans folder is unlocked. Your saved plans were kept.');
+        deps.ui.outro(`Run ${stateCommand('connect',args,command.options.stateDir!)} to start a new local connection.`);return;
+      }
+      doctorLock=await deps.inspectLock(command.options.stateDir!);
+      showStateLock(deps.ui,doctorLock,repair);
+    }
     if(guided)deps.ui.note('Choose your GitHub account and repositories.\nYour sign-in stays on this computer. No organization app installation needed.','Your merge map, connected locally');
     const user=await account(deps,guided);deps.ui.success(`Connected as @${user.login}`);
     if(command.command==='doctor'){
       deps.ui.success(`Node.js ${deps.nodeVersion} is supported.`);
       if(command.options.repositories.length){const repositories=await step(deps.ui,'Checking repository access…','Repository access verified.',()=>deps.github.verifyRepositories(command.options.repositories));deps.ui.note(repositories.map(repo=>repo.fullName).join('\n'),'Available repositories');}
-      deps.ui.info(`Saved plans folder: ${command.options.stateDir}`);
-      deps.ui.outro('Your setup is ready. Run mergefoo connect to choose repositories.');return;
+      deps.ui.outro(doctorLock?.state==='unlocked'?'Your setup is ready. Run mergefoo connect to choose repositories.':'Your GitHub setup is ready. Resolve the process lock above before connecting.');return;
     }
     if(guided)command.options.repositories=await chooseRepositories(deps,user);
     const repositories=await step(deps.ui,'Checking selected repository access…','Selected repository access verified.',()=>deps.github.verifyRepositories(command.options.repositories));
