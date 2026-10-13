@@ -3,7 +3,10 @@ import {readBoundedBody,RequestBodyError} from './request-body-core';
 
 type Repository={id:number;installationId:number;full_name:string;private:boolean};
 export type WebhookInbox={repo:Repository;event:string;delivery:string;receivedAt:string;state:'pending'|'done';lease?:{id:string;expiresAt:string}};
-export type WebhookReceiptOptions={secret?:string;scopes?:string;getStore:()=>Promise<StateStore>};
+export type WebhookReceiptStage='entry'|'configuration'|'body'|'signature'|'decode'|'scope'|'store'|'store_read'|'store_write'|'store_confirm'|'complete';
+export type WebhookReceiptDiagnostic={phase:'entry'|'outcome';stage:WebhookReceiptStage;delivery?:string;status?:number;elapsedMs:number;errorClass?:'timeout'|'configuration'|'body'|'signature'|'payload'|'storage'|'internal'};
+export type WebhookReceiptOptions={secret?:string;scopes?:string;getStore:()=>Promise<StateStore>;deadlineMs?:number;diagnostic?:(diagnostic:WebhookReceiptDiagnostic)=>void};
+class ReceiptDeadlineError extends Error {}
 class ReceiptError extends Error {constructor(message:string,readonly status:number){super(message);}}
 const EVENTS=new Set(['pull_request','pull_request_review','pull_request_review_comment']);
 function json(value:unknown,status:number){return Response.json(value,{status,headers:{'Cache-Control':'private, no-store','Pragma':'no-cache','Vary':'Cookie','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});}
@@ -22,30 +25,70 @@ export async function verifyWebhookSignature(body:Uint8Array,signature:string|nu
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['verify']);
   return crypto.subtle.verify('HMAC',key,bytes,body as Uint8Array<ArrayBuffer>);
 }
+function errorClassFor(error:unknown,stage:WebhookReceiptStage):WebhookReceiptDiagnostic['errorClass'] {
+  if(error instanceof ReceiptDeadlineError)return 'timeout';
+  if(error instanceof RequestBodyError)return 'body';
+  if(stage==='configuration')return 'configuration';
+  if(stage==='signature')return 'signature';
+  if(stage==='decode')return 'payload';
+  return stage.startsWith('store')?'storage':'internal';
+}
 /** Both hosts use this receipt protocol. It never invokes GitHub or executes workflow effects. */
 export async function handleWebhookReceipt(request:Request,options:WebhookReceiptOptions):Promise<Response> {
-  try {
+  const started=Date.now();let stage:WebhookReceiptStage='entry';
+  const candidate=request.headers.get('X-GitHub-Delivery');
+  const deliveryId=candidate&&/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(candidate)?candidate:undefined;
+  const report=(phase:'entry'|'outcome',status?:number,errorClass?:WebhookReceiptDiagnostic['errorClass'])=>{
+    try{options.diagnostic?.({phase,stage,...(deliveryId?{delivery:deliveryId}:{}),...(status?{status}:{}),elapsedMs:Math.max(0,Date.now()-started),...(errorClass?{errorClass}:{})});}catch{/* Diagnostics must never change receipt semantics. */}
+  };
+  report('entry');
+  const controller=new AbortController();
+  const deadlineMs=Number.isFinite(options.deadlineMs)&&options.deadlineMs!>0?Math.min(options.deadlineMs!,7000):7000;
+  let timer:ReturnType<typeof setTimeout>;
+  const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{
+    const error=new ReceiptDeadlineError();reject(error);controller.abort(error);
+  },deadlineMs);});
+  const assertDeadline=()=>{
+    // Timers cannot preempt synchronous work; also check elapsed time before advancing or ACKing.
+    if(Date.now()-started>=deadlineMs&&!controller.signal.aborted)controller.abort(new ReceiptDeadlineError());
+    controller.signal.throwIfAborted();
+  };
+  const at=(next:WebhookReceiptStage)=>{assertDeadline();stage=next;};
+  const receive=async()=>{
+    at('configuration');
     if(!options.secret||options.secret.length<32)throw new ReceiptError('GitHub webhook verification is not configured.',503);
-    const body=await readBoundedBody(request,1000000);
+    at('body');const body=await readBoundedBody(request,1000000,controller.signal);
+    at('signature');
     if(!await verifyWebhookSignature(body,request.headers.get('X-Hub-Signature-256'),options.secret))throw new ReceiptError('Invalid GitHub webhook signature.',401);
+    at('decode');
     const event=request.headers.get('X-GitHub-Event')??'';if(event==='ping'||!EVENTS.has(event))return json({accepted:true,ignored:true},202);
     const delivery=request.headers.get('X-GitHub-Delivery');if(!delivery||! /^[a-f\d-]{16,64}$/i.test(delivery))throw new ReceiptError('Missing GitHub delivery identity.',400);
     let input:{installation?:{id:number};repository?:{id:number;full_name:string;private:boolean}};
     try{input=JSON.parse(new TextDecoder().decode(body));}catch{throw new ReceiptError('Invalid webhook JSON.',400);}
     if(!input||typeof input!=='object')throw new ReceiptError('Invalid webhook JSON.',400);
     const repo=repository({...input.repository,installationId:input.installation?.id});
-    if(!scoped(repo,options.scopes))return json({accepted:true,ignored:true},202);
+    at('scope');if(!scoped(repo,options.scopes))return json({accepted:true,ignored:true},202);
     const scope=`${repo.installationId}:${repo.id}`,key=`webhook:${delivery}`;
-    const store=await options.getStore();const previous=await store.read<WebhookInbox>(scope,'inbox',key);
+    at('store');const store=await options.getStore();
+    at('store_read');const previous=await store.read<WebhookInbox>(scope,'inbox',key);
+    at('store_write');
     if(previous?.value.state==='done')return json({accepted:true,duplicate:true},202);
     if(!previous){
       const saved=await store.compareAndSwap<WebhookInbox>(scope,'inbox',key,0,{repo,event,delivery,receivedAt:new Date().toISOString(),state:'pending'},{id:'github',login:'GitHub webhook'});
-      // A concurrent receipt may win the CAS. Confirm its durable row before ACK.
+      // An in-flight CAS may commit after a timeout. Redelivery uses the same durable key.
+      at('store_confirm');
       if(!saved&&!await store.read<WebhookInbox>(scope,'inbox',key))throw new Error('No durable receipt.');
     }
-    return json({accepted:true,queued:true},202);
+    at('complete');return json({accepted:true,queued:true},202);
+  };
+  try {
+    const response=await Promise.race([receive(),expired]);
+    assertDeadline();stage='complete';report('outcome',response.status);return response;
   }catch(error){
-    if(error instanceof ReceiptError||error instanceof RequestBodyError)return json({error:error.message},error.status);
-    return json({error:'Webhook receipt is unavailable. GitHub may retry this delivery.'},503);
-  }
+    const errorClass=errorClassFor(error,stage);
+    const status=error instanceof ReceiptError||error instanceof RequestBodyError?error.status:503;
+    report('outcome',status,errorClass);
+    if(error instanceof ReceiptError||error instanceof RequestBodyError)return json({error:error.message},status);
+    return json({error:'Webhook receipt is unavailable. Manually redeliver in GitHub; scheduled polling can reconcile repository state.'},503);
+  }finally{clearTimeout(timer!);}
 }

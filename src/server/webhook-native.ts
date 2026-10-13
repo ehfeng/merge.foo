@@ -10,6 +10,7 @@ export async function nativeWebhookIngress(request:Request,environment:Record<st
   return handleWebhookReceipt(request,{
     secret:stringValue('GITHUB_WEBHOOK_SECRET'),
     scopes:stringValue('WORKFLOW_REPOSITORIES'),
+    diagnostic:diagnostic=>console.info(JSON.stringify({event:'github_webhook_receipt',...diagnostic})),
     getStore:async():Promise<StateStore>=>{
       const connection=stringValue('DATABASE_URL');
       const mode=stringValue('STATE_STORE')||(connection?'postgres':'durable-object');
