@@ -14,6 +14,8 @@ With hosted review writes verified false, all five original failed deliveries we
 
 This fixes unbounded waits and adds observed successful replay/new-insert evidence. It does not establish the exact old delay or guarantee that every future platform/network delivery succeeds. Review automation remains paused; no new review requests, review decisions or merges were used for the repair verification.
 
+## Historical pilot record (before receipt repair)
+
 
 This report records the user-approved test on the hosted [merge.foo service](https://merge-foo.eric.workers.dev). The complete scoped review/progression/rollback sequence passed independently, with all PRs left open/unmerged and no pending requests. **Webhook reliability remains unresolved:** two additional deliveries returned 500 after the native mitigation deployed. Automatic progression and global GitHub workflow writes are now off while those failures are investigated. The original exception remains unknown.
 
