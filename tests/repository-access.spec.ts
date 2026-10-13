@@ -2,6 +2,9 @@ import {test,expect,type Page} from '@playwright/test';
 import {createFixture} from '../src/domain/fixtures';
 const selected={id:1,installationId:10,full_name:'selected/repo',private:true};
 const other={id:2,installationId:10,full_name:'other/repo',private:true};
+test.beforeEach(async({page})=>{
+  await page.route('**/api/github/reviewers?*',route=>route.request().method()==='GET'?route.fulfill({json:{suggestedReviewers:[],reviewers:[]}}):route.fallback());
+});
 async function authenticated(page:Page){
   await page.route('**/api/session',route=>route.fulfill({json:{configured:true,authenticated:true,login:'alice',installationUrl:'https://github.com/apps/merge-foo/installations/new'}}));
   await page.route('**/api/auth/logout',route=>route.fulfill({json:{ok:true}}));

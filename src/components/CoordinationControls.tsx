@@ -3,7 +3,7 @@ import {AlertCircle,Pause,Play,RefreshCw} from 'lucide-react';
 import type {PullRequest,Workspace} from '../domain/types';
 import {ancestors,isApproved} from '../domain/engine';
 import type {WorkflowCommand} from '../workflow/types';
-export type CoordinationAccess={canManage:boolean;writesEnabled:boolean;backgroundEnabled:boolean};
+export type CoordinationAccess={canManage:boolean;writesEnabled:boolean;backgroundEnabled:boolean;source?:'companion'};
 export default function CoordinationControls({workspace,pr,access,viewerLogin,saving,onCommand,onVerifyPlan}:{workspace:Workspace;pr:PullRequest;access:CoordinationAccess;viewerLogin?:string;saving:boolean;onCommand:(command:WorkflowCommand)=>void;onVerifyPlan?:()=>void}) {
   const stack=workspace.stacks.find(s=>s.id===pr.stackId);
   const canEdit=!!pr.canEditPlan;
@@ -22,8 +22,8 @@ export default function CoordinationControls({workspace,pr,access,viewerLogin,sa
       {viewerLogin?.toLowerCase()===pr.author.toLowerCase()&&<label className="coordination-field">Minimum approvals<div className="coordination-input-row"><input aria-label={`Minimum approvals for #${pr.number}`} type="number" min={1} max={20} value={minimum} disabled={saving} onChange={e=>setMinimum(Number(e.target.value))}/><button className="button subtle" disabled={saving||!Number.isInteger(minimum)||minimum<1||minimum>20||minimum===Math.max(1,pr.requiredApprovals)} onClick={()=>onCommand({type:'configure_pr',prId:pr.id,minimumApprovals:minimum})}>Save</button></div></label>}
     </>}
     {access.canManage&&stack&&<div className="coordination-feature"><button className="button subtle full" disabled={saving} onClick={()=>onCommand({type:'enroll',stackId:stack.id,enabled:!enrolled,prIds:workspace.prs.filter(p=>p.stackId===stack.id).map(p=>p.id)})}>{enrolled?'Disable feature coordination':'Enable feature coordination'}</button><p className="microcopy">Enrollment records this feature’s PRs. Its first review starts explicitly.</p>{enrolled&&<button className="selected-auto" aria-label={`Automatic progression for ${stack.title}`} aria-pressed={stack.autoProgress} disabled={saving||(!stack.autoProgress&&(!access.writesEnabled||!access.backgroundEnabled))} onClick={()=>onCommand({type:'auto',stackId:stack.id,enabled:!stack.autoProgress})}>Automatic progression <strong>{stack.autoProgress?'On':'Off'}</strong></button>}</div>}
-    {!access.writesEnabled&&<p className="microcopy">Review plans, holds and dependencies are saved. The operator still needs to enable GitHub review actions.</p>}
-    {access.writesEnabled&&!access.backgroundEnabled&&<p className="microcopy">Review actions need background GitHub setup for this repository.</p>}
+    {!access.writesEnabled&&<p className="microcopy">{access.source==='companion'?'Review plans, holds and dependencies are saved on this device. This helper was started with --read-only. Restart it without that flag to enable GitHub review actions.':'Review plans, holds and dependencies are saved. The operator still needs to enable GitHub review actions.'}</p>}
+    {access.writesEnabled&&!access.backgroundEnabled&&<p className="microcopy">{access.source==='companion'?'Keep the companion running on this device for GitHub review actions and automatic progression.':'Review actions need background GitHub setup for this repository.'}</p>}
     {pr.workflow?.reason&&<div className="notice warning"><AlertCircle size={15}/><span>{pr.workflow.reason}</span></div>}
     {pr.workflow?.targets?.length&&(pr.workflow.pending||pr.workflow.uncertain)?<p className="microcopy">Queued release recipients: {pr.workflow.targets.map(r=>`@${r.login}`).join(', ')}. Editing the plan changes future releases.</p>:null}
     {pr.workflow?.uncertain&&<p className="microcopy">An external result needs reconciliation. Refreshing will check GitHub before any retry.</p>}

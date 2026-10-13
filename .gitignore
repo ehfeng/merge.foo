@@ -31,7 +31,14 @@ docs/screenshots/*
 !docs/screenshots/work-map-after-mobile-selected.png
 !docs/screenshots/work-map-aligned.jpg
 !docs/screenshots/work-map-aligned-detail.jpg
+!docs/screenshots/companion-onboarding.png
+!docs/screenshots/companion-onboarding-mobile.png
+!docs/screenshots/companion-connected.png
+!docs/screenshots/companion-connected-mobile.png
 
 next-env.d.ts
 
 __pycache__/
+
+# Local companion plans and workflow history are private to this computer.
+.mergefoo-companion/

@@ -2,6 +2,11 @@ import {github,revalidateIdentity,type Session} from './auth';
 import type { PullRequest, Reviewer, Workspace } from '../domain/types';
 
 export type Repo = {id:number;full_name:string;private:boolean;installationId:number};
+/** Trusted server-side transport. A local companion can use gh without exporting its credential. */
+export type GitHubApi = {
+  request<T>(path:string,method?:string,body?:unknown):Promise<T>;
+  graph<T>(query:string,variables:Record<string,unknown>):Promise<T>;
+};
 type InstalledRepo=Omit<Repo,'installationId'>&{archived?:boolean};
 type GqlUser = {login:string};
 type RepoIdentity={id:string;nameWithOwner:string};
@@ -43,19 +48,43 @@ export async function graphQuery<T>(token:string,query:string,variables:Record<s
   if(result.errors||!result.data)throw new Error('GitHub could not read this repository. Check the App installation and read permissions.');
   return result.data;
 }
+export async function fetchReviewerSuggestions(repo:Repo,prId:string,api:GitHubApi):Promise<{suggestedReviewers:NonNullable<PullRequest['suggestedReviewers']>;reviewers:Reviewer[]}> {
+  if(typeof prId!=='string'||!prId||prId.length>200)throw new AccessError('Select a valid pull request.',400);
+  const result=await api.graph<{node:null|{__typename:string;repository?:{databaseId:number};suggestedReviewers?:GqlPr['suggestedReviewers']}}>(`query SelectedReviewers($id:ID!) {node(id:$id) {__typename ... on PullRequest {repository {databaseId} suggestedReviewers {reviewer {login} isAuthor isCommenter}}}}`,{id:prId});
+  if(result.node?.__typename!=='PullRequest'||result.node.repository?.databaseId!==repo.id)throw new AccessError('This pull request does not belong to the selected repository.',404);
+  if(!Array.isArray(result.node.suggestedReviewers))throw new AccessError('GitHub reviewer suggestions are unavailable.',502);
+  const reviewers=new Map<string,Reviewer>();
+  const suggestedReviewers=result.node.suggestedReviewers.filter(s=>s!==null).map(s=>{
+    const login=s.reviewer?.login;
+    if(typeof login!=='string'||!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(login))throw new AccessError('GitHub returned an invalid suggested reviewer.',502);
+    reviewers.set(login,{id:login,name:login,initials:login.slice(0,2).toUpperCase(),color:'#8674bd',specialty:'GitHub reviewer'});
+    return {reviewerId:login,isAuthor:s.isAuthor,isCommenter:s.isCommenter};
+  });
+  return {suggestedReviewers,reviewers:[...reviewers.values()]};
+}
 const fields=`id number title url bodyText isDraft state headRefName baseRefName headRepository {id nameWithOwner} baseRepository {id nameWithOwner} additions deletions reviewDecision mergeable author {login} statusCheckRollup {state}
-  suggestedReviewers {reviewer {login} isAuthor isCommenter}
   reviews(last:100) {nodes {author {login} state submittedAt}}
   reviewRequests(first:100) {nodes {requestedReviewer {... on User {login} ... on Team {slug}}}}
   timelineItems(last:100,itemTypes:[REVIEW_REQUESTED_EVENT]) {nodes {... on ReviewRequestedEvent {createdAt requestedReviewer {... on User {login}}}}}
   labels(first:20) {nodes {name}}`;
+const ancestryFields='id state headRefName baseRefName headRepository {id nameWithOwner} baseRepository {id nameWithOwner}';
+type AncestryPr=Pick<GqlPr,'id'|'state'|'headRefName'|'baseRefName'|'headRepository'|'baseRepository'>;
+type HistoryPage={repository:null|{pullRequests:{nodes:AncestryPr[];pageInfo:{hasNextPage:boolean;endCursor:string|null}}}};
 type Page={repository:null|{viewerPermission:string;pullRequests:{nodes:GqlPr[];pageInfo:{hasNextPage:boolean;endCursor:string|null}}}};
 export async function fetchRepository(data:Session,fullName:string):Promise<{workspace:Workspace;warnings:string[];repo:Repo}> {
   const repo=await validateRepositoryAccess(data,fullName);
+  return fetchRepositoryWith({id:Number(data.userId),login:data.login},repo,{
+    request:<T>(path:string)=>github<T>(data.token,path),
+    graph:<T>(query:string,variables:Record<string,unknown>)=>graphQuery<T>(data.token,query,variables),
+  });
+}
+/** Caller must freshly verify the identity and repository grant before invoking this reader. */
+export async function fetchRepositoryWith(identity:{id:number;login:string},repo:Repo,api:GitHubApi):Promise<{workspace:Workspace;warnings:string[];repo:Repo}> {
   const [owner,name]=repo.full_name.split('/'); const all:GqlPr[]=[];
   let cursor:string|null=null;let permission='READ';
+  // Reviewer suggestions are read separately for the selected PR to meet GitHub's query deadline.
   for(let page=0;page<100;page++) {
-    const result:Page=await graphQuery<Page>(data.token,`query WorkMap($owner:String!,$name:String!,$cursor:String) {repository(owner:$owner,name:$name) {viewerPermission pullRequests(first:50,after:$cursor,states:OPEN,orderBy:{field:CREATED_AT,direction:ASC}) {pageInfo {hasNextPage endCursor} nodes {${fields}}}}}`,{owner,name,cursor});
+    const result:Page=await api.graph<Page>(`query WorkMap($owner:String!,$name:String!,$cursor:String) {repository(owner:$owner,name:$name) {viewerPermission pullRequests(first:50,after:$cursor,states:OPEN,orderBy:{field:CREATED_AT,direction:ASC}) {pageInfo {hasNextPage endCursor} nodes {${fields}}}}}`,{owner,name,cursor});
     if(!result.repository)throw new AccessError('Repository access is no longer available.');
     permission=result.repository.viewerPermission;all.push(...result.repository.pullRequests.nodes);
     if(!result.repository.pullRequests.pageInfo.hasNextPage)break;
@@ -64,21 +93,37 @@ export async function fetchRepository(data:Session,fullName:string):Promise<{wor
     cursor=next;
   }
   // Recent merged ancestry is deliberately bounded; never imply complete historical coverage.
-  const history=await graphQuery<Page>(data.token,`query Ancestry($owner:String!,$name:String!) {repository(owner:$owner,name:$name) {viewerPermission pullRequests(first:100,states:MERGED,orderBy:{field:UPDATED_AT,direction:DESC}) {pageInfo {hasNextPage endCursor} nodes {${fields}}}}}`,{owner,name});
-  const merged=history.repository?.pullRequests.nodes??[];
+  const merged:AncestryPr[]=[];let historyCursor:string|null=null;
+  for(let page=0;page<4;page++) {
+    const history:HistoryPage=await api.graph<HistoryPage>(`query Ancestry($owner:String!,$name:String!,$cursor:String) {repository(owner:$owner,name:$name) {pullRequests(first:25,after:$cursor,states:MERGED,orderBy:{field:UPDATED_AT,direction:DESC}) {pageInfo {hasNextPage endCursor} nodes {${ancestryFields}}}}}`,{owner,name,cursor:historyCursor});
+    if(!history.repository)throw new AccessError('Repository access is no longer available.');
+    merged.push(...history.repository.pullRequests.nodes);
+    if(!history.repository.pullRequests.pageInfo.hasNextPage)break;
+    const next:string|null=history.repository.pullRequests.pageInfo.endCursor;
+    if(!next||next===historyCursor)throw new Error('Merged ancestry pagination could not complete.');
+    historyCursor=next;
+  }
   const selected=new Set(all.map(p=>p.id));
   for(let pass=0;pass<merged.length;pass++)for(const candidate of merged)if(!selected.has(candidate.id)&&[...all,...merged.filter(p=>selected.has(p.id))].some(p=>sameBranch(candidate,p))){selected.add(candidate.id);}
-  const normalized=normalize([...all,...merged.filter(p=>selected.has(p.id))],repo.full_name);
+  // Read full reviews only for ancestors that actually connect to an open PR.
+  const ids=merged.filter(p=>selected.has(p.id)).map(p=>p.id);const ancestors:GqlPr[]=[];
+  for(let offset=0;offset<ids.length;offset+=5) {
+    const batch=ids.slice(offset,offset+5);
+    const result=await api.graph<{nodes:((GqlPr&{repository:{databaseId:number}})|null)[]}>(`query WorkMapAncestors($ids:[ID!]!) {nodes(ids:$ids) {... on PullRequest {repository {databaseId} ${fields}}}}`,{ids:batch});
+    if(!Array.isArray(result.nodes)||result.nodes.length!==batch.length||result.nodes.some((pr,index)=>!pr||pr.id!==batch[index]||pr.state!=='MERGED'||pr.repository?.databaseId!==repo.id))throw new AccessError('Merged ancestry changed while loading. Refresh the repository.',409);
+    ancestors.push(...result.nodes as GqlPr[]);
+  }
+  const normalized=normalize([...all,...ancestors],repo.full_name);
   normalized.warnings.push('All open PRs across authors loaded. Merged ancestry covers matching branches among the 100 most recently updated merged PRs; older or deleted branches may be missing.');
-  for(const pr of normalized.workspace.prs)pr.canEditPlan=pr.lifecycle==='open'&&(pr.author.toLowerCase()===data.login.toLowerCase()||['ADMIN','MAINTAIN','WRITE'].includes(permission));
+  for(const pr of normalized.workspace.prs)pr.canEditPlan=pr.lifecycle==='open'&&(pr.author.toLowerCase()===identity.login.toLowerCase()||['ADMIN','MAINTAIN','WRITE'].includes(permission));
   return {...normalized,repo};
 }
-function sameBranch(parent:GqlPr,child:GqlPr) {
+function sameBranch(parent:AncestryPr,child:AncestryPr) {
   // Missing repository identity is unsafe, particularly for forks with repeated branch names.
   return parent.id!==child.id&&!!parent.headRepository&&!!child.baseRepository&&parent.headRepository.id===child.baseRepository.id&&parent.headRefName===child.baseRefName;
 }
 export function normalize(nodes:GqlPr[],repository:string,truncated=false):{workspace:Workspace;warnings:string[]} {
-  const warnings:string[]=['GitHub snapshot with shared planned assignments. Assignments send no review request or notification.','Repository coverage only. Request and review history is limited to the latest 100 events per PR; observed reviewer load is partial.'];
+  const warnings:string[]=['GitHub snapshot. Planned assignments send no review request or notification.','Repository coverage only. Request and review history is limited to the latest 100 events per PR; observed reviewer load is partial.'];
   if(truncated)warnings.push('Partial PR coverage. Dependencies may be incomplete.');
   const parent=new Map<string,string>();
   for(const node of nodes) {
@@ -96,7 +141,7 @@ export function normalize(nodes:GqlPr[],repository:string,truncated=false):{work
     if(p.reviewRequests.nodes.some(r=>r.requestedReviewer&&!r.requestedReviewer.login))warnings.push(`#${p.number}: team review requests are present; individual load is incomplete.`);
     return {id:p.id,number:p.number,title:p.title,url:p.url,stackId:root(p.id),parentId:parent.get(p.id),repository,branch:p.headRefName,author:p.author?.login??'Unknown',summary:p.bodyText?.slice(0,1200)||'No pull request description.',areas:[],
       lifecycle:p.state==='MERGED'?'merged':p.state==='CLOSED'?'closed':'open',readiness:p.isDraft?'draft':'ready',held:false,checks:p.statusCheckRollup?.state==='SUCCESS'?'passing':p.statusCheckRollup?.state==='FAILURE'?'failing':'pending',mergeability:p.mergeable==='MERGEABLE'?'clean':p.mergeable==='CONFLICTING'?'conflicts':'unknown',contentVersion:1,validity:'fresh',requiredApprovals:0,observedGate:p.reviewDecision==='APPROVED'?'approved':p.reviewDecision==='CHANGES_REQUESTED'?'changes_requested':p.reviewDecision==='REVIEW_REQUIRED'?'review_required':'unknown',
-      plannedReviewerIds:[],planVersion:0,suggestedReviewers:(p.suggestedReviewers??[]).filter(s=>s!==null).map(s=>({reviewerId:register(s.reviewer.login),isAuthor:s.isAuthor,isCommenter:s.isCommenter})),requests,reviews:p.reviews.nodes.filter(r=>r.author&&['APPROVED','CHANGES_REQUESTED','COMMENTED'].includes(r.state)).map(r=>({reviewerId:register(r.author!.login),decision:r.state==='APPROVED'?'approved':r.state==='CHANGES_REQUESTED'?'changes_requested':'commented',contentVersion:1,at:r.submittedAt})),
+      plannedReviewerIds:[],planVersion:0,suggestedReviewers:p.suggestedReviewers?.filter(s=>s!==null).map(s=>({reviewerId:register(s.reviewer.login),isAuthor:s.isAuthor,isCommenter:s.isCommenter})),requests,reviews:p.reviews.nodes.filter(r=>r.author&&['APPROVED','CHANGES_REQUESTED','COMMENTED'].includes(r.state)).map(r=>({reviewerId:register(r.author!.login),decision:r.state==='APPROVED'?'approved':r.state==='CHANGES_REQUESTED'?'changes_requested':'commented',contentVersion:1,at:r.submittedAt})),
       lines:{added:p.additions,deleted:p.deletions,discounted:0,reason:'No effective-LOC discounts calculated for live data.'},complexity:'Unknown',risk:'Unknown',riskReason:'Risk and complexity have not been assessed.',priority:p.labels.nodes.some(l=>/urgent|p0/i.test(l.name))?'Urgent':'Normal'};
   });
   const stacks=[...new Set(prs.map(p=>p.stackId))].map((id,index)=>({id,title:prs.find(p=>p.id===id)?.title??'Related pull requests',description:`${repository} · observed repository and branch relationship`,autoProgress:false,color:['#8171d4','#d79661','#66a09b'][index%3]}));

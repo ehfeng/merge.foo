@@ -22,6 +22,29 @@ const document=():WorkflowDocument=>{const doc=emptyWorkflow();doc.config.stacks
 const action=():WorkflowAction=>({id:'P1:1:ready',prId:'P1',stackId:'feature',generation:1,mode:'manual',kind:'ready',status:'claimed',claim:{id:'claim',owner:'worker',expiresAt:'2026-10-12T12:05:00Z'},attempts:1,dueAt:at,startedAt:at,effectActorId:'1',baselineEventIds:[]});
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('GitHub workflow read and write boundaries',()=>{
+ it('uses a credential-free companion API while retaining the dispatch fence and user attribution',async()=>{
+   const {principal,fetcher}=setup();vi.stubEnv('GITHUB_WORKFLOW_WRITES_ENABLED','false');
+   const directFetch=vi.fn(()=>{throw new Error('Companion must not call fetch with a GitHub credential');});vi.stubGlobal('fetch',directFetch);
+   const api={request:async<T>(path:string,method='GET',body?:unknown):Promise<T>=>{
+     const response=await fetcher(`https://api.github.com${path}`,{method,body:body===undefined?undefined:JSON.stringify(body)});
+     if(!response.ok)throw new Error('Fixture request failed');return response.json() as Promise<T>;
+   }};
+   const adapter=new GitHubWorkflowTransport({repository:repo.full_name,enabled:true,api,principal:async()=>({...await principal(),token:undefined}),loadWorkspacePlans:async()=>{}});
+   const snapshot=await adapter.observe();await adapter.authorize(action(),document(),snapshot);
+   expect(await adapter.perform(action(),snapshot,async()=>true)).toMatchObject({state:'applied',receipt:{actorId:'1'}});
+   expect(directFetch).not.toHaveBeenCalled();
+   expect(fetcher.mock.calls.some(([url])=>String(url).includes('/user/installations'))).toBe(false);
+ });
+ it('bounds companion observations and requires a scoped principal',async()=>{
+   const {principal,fetcher}=setup();
+   const api={request:async<T>(path:string,method='GET',body?:unknown):Promise<T>=>{
+     const response=await fetcher(`https://api.github.com${path}`,{method,body:body===undefined?undefined:JSON.stringify(body)});return response.json() as Promise<T>;
+   }};
+   const bounded=new GitHubWorkflowTransport({repository:repo.full_name,api,principal:async()=>({...await principal(),token:undefined}),externalRequestLimit:1,loadWorkspacePlans:async()=>{}});
+   await expect(bounded.observe()).rejects.toThrow('budget reached');
+   const unscoped=new GitHubWorkflowTransport({repository:repo.full_name,api,principal:async()=>({...await principal(),token:undefined,authorizeScope:undefined}),loadWorkspacePlans:async()=>{}});
+   await expect(unscoped.observe()).rejects.toThrow('authorization strategy is incomplete');
+ });
  it('reads authoritative policy/complete reviews without user endpoints under injected installation principal',async()=>{const {adapter,fetcher}=setup();const snapshot=await adapter.observe();expect(snapshot.scope).toBe('9:4');expect(snapshot.prs[0].githubGate).toBe('none');expect(snapshot.prs[0].reviews[0].eligible).toBe(true);expect(adapter.workspace?.prs[0].canEditPlan).toBe(true);expect(fetcher.mock.calls.some(([url])=>String(url).includes('/user'))).toBe(false);});
  it('does not let missing commentator eligibility revoke a satisfied gate',async()=>{const {adapter,fetcher}=setup({comment:true});const snapshot=await adapter.observe();expect(snapshot.prs[0].reviewsComplete).toBe(true);expect(fetcher.mock.calls.some(([url])=>String(url).includes('/collaborators/external'))).toBe(false);});
  it('requires both operator configuration and caller intent before write calls',async()=>{const {principal,fetcher}=setup();vi.stubEnv('GITHUB_WORKFLOW_WRITES_ENABLED','false');const adapter=new GitHubWorkflowTransport({repository:'acme/repo',principal,enabled:true});await expect(adapter.perform(action(),{scope:'9:4',repository:'acme/repo',observedAt:at,complete:true,prs:[]})).rejects.toThrow('disabled');expect(fetcher).not.toHaveBeenCalled();});

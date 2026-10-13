@@ -3,7 +3,7 @@ import { Check,ChevronDown,UserPlus,X } from 'lucide-react';
 import type { PullRequest,Workspace } from '../domain/types';
 import { reviewerLoad } from '../domain/engine';
 export function Avatar({name,color,size=24}:{name:string;color:string;size?:number}) {return <span className="avatar" style={{background:color,width:size,height:size}}>{name}</span>;}
-export default function ReviewerPicker({workspace,pr,onChange,readOnly=false,saving=false}:{workspace:Workspace;pr:PullRequest;onChange:(ids:string[])=>void;readOnly?:boolean;saving?:boolean}) {
+export default function ReviewerPicker({workspace,pr,onChange,readOnly=false,saving=false,planSource,suggestionsLoading=false,suggestionsError=''}:{workspace:Workspace;pr:PullRequest;onChange:(ids:string[])=>void;readOnly?:boolean;saving?:boolean;planSource?:'companion';suggestionsLoading?:boolean;suggestionsError?:string}) {
   const [open,setOpen]=useState(false);const [login,setLogin]=useState('');const ref=useRef<HTMLDivElement>(null);
   const editable=!readOnly||pr.canEditPlan;
   useEffect(()=>{if(!open)return;const close=(event:MouseEvent)=>{if(!ref.current?.contains(event.target as Node))setOpen(false);};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.stopPropagation();setOpen(false);ref.current?.querySelector('button')?.focus();}};document.addEventListener('mousedown',close);document.addEventListener('keydown',escape,true);return()=>{document.removeEventListener('mousedown',close);document.removeEventListener('keydown',escape,true);};},[open]);
@@ -18,8 +18,8 @@ export default function ReviewerPicker({workspace,pr,onChange,readOnly=false,sav
     {requested.length>0&&<small className="requested-context">Requested in GitHub: {requested.join(', ')}</small>}
     {open&&<div className="reviewer-popover" role="dialog" aria-label={`Reviewer plan for #${pr.number}`}>
       <div className="popover-heading"><strong>Planned assignments</strong><button className="icon-button" aria-label="Close reviewer picker" onClick={()=>setOpen(false)}><X size={14}/></button></div>
-      <p>{readOnly?'Shared repository plan. No GitHub review requests or notifications.':'Lab plan. No requests until review starts.'}</p>
-      {readOnly&&<p>{suggested.length?'GitHub suggestions appear first, in GitHub’s returned order.':'GitHub returned no suggested reviewers. Choose an explicit repository collaborator.'}</p>}
+      <p>{readOnly?planSource==='companion'?'Personal plan saved on this device. No GitHub review requests or notifications.':'Shared repository plan. No GitHub review requests or notifications.':'Lab plan. No requests until review starts.'}</p>
+      {readOnly&&<p role={suggestionsLoading||suggestionsError?'status':undefined}>{suggestionsLoading?'Loading GitHub reviewer suggestions…':suggestionsError?`GitHub reviewer suggestions are unavailable. ${suggestionsError} Close and reopen this PR to retry, or choose an explicit repository collaborator.`:pr.suggestedReviewers===undefined?'GitHub reviewer suggestions have not been loaded. You can choose an explicit repository collaborator.':suggested.length?'GitHub suggestions appear first, in GitHub’s returned order.':'GitHub returned no suggested reviewers. Choose an explicit repository collaborator.'}</p>}
       {!editable&&<p>Only the PR author or a repository writer can edit this open PR’s plan.</p>}
       {saving&&<p role="status">Saving planned assignment…</p>}
       {candidates.map(id=>{const reviewer=workspace.reviewers.find(r=>r.id===id);if(!reviewer)return null;const load=reviewerLoad(workspace,id);const checked=ids.includes(id);const suggestion=suggested.find(s=>s.reviewerId===id);const savedIdentity=pr.plannedReviewerIdentities?.find(r=>r.login===id);return <button key={id} className="reviewer-option" role="checkbox" aria-checked={checked} disabled={!editable||saving} onClick={()=>onChange(checked?ids.filter(i=>i!==id):[...ids,id])}>

@@ -5,7 +5,10 @@ const openPlan=async(page:Page,number:number)=>{await selectPr(page,number);awai
 import {createFixture} from '../src/domain/fixtures';
 
 // Keep acceptance fixtures independent of local/hosted user credentials.
-test.beforeEach(async({page})=>{await page.route('**/api/session',r=>r.fulfill({json:{configured:false,authenticated:false}}));});
+test.beforeEach(async({page})=>{
+  await page.route('**/api/session',r=>r.fulfill({json:{configured:false,authenticated:false}}));
+  await page.route('**/api/github/reviewers?*',route=>route.request().method()==='GET'?route.fulfill({json:{suggestedReviewers:[],reviewers:[]}}):route.fallback());
+});
 
 test('default experience connects GitHub; fixture lab is explicit',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));

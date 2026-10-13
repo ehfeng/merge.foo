@@ -6,7 +6,7 @@ Live app: **https://merge.foo**. The purchased domain connects to the existing C
 
 ## Normal user onboarding
 
-The intended public product uses one operator-owned merge.foo GitHub App. Developers sign in with GitHub, authorize that existing App and choose a repository it can access. If repository access has not been granted, an account/repository administrator installs the same App or handles an installation request. Developers do not register their own App, enter client secrets or run setup scripts. See [normal user onboarding](docs/setup.md#normal-user-onboarding).
+Developers can connect through the operator-owned merge.foo GitHub App or the [local GitHub CLI companion](docs/companion.md). The App route uses GitHub sign-in and accessible installed repositories; if access has not been granted, an eligible administrator installs the App or handles an installation request. The companion uses your existing `gh` login for explicitly selected repositories without installing the merge.foo App. Developers do not register their own App or enter its client secrets. See [normal user onboarding](docs/setup.md#normal-user-onboarding).
 
 Public sign-in and [self-service repository connection](docs/onboarding.md) are deployed. Each user chooses repositories through GitHub; connection links and list refresh remain available even with an existing selection. The foundation reads PRs across authors, uses GitHub reviewer suggestions and saves shared plans in SQLite Durable Objects. Local/hosted OAuth and the selected pilot are verified, including real suggestions, plans, holds and effects. Another real user and representative complex repositories remain unverified. Plans send no GitHub requests or notifications.
 
@@ -23,6 +23,16 @@ pnpm dev
 Open **http://127.0.0.1:3000**. The current integration reads GitHub through the product's dedicated App. Operators should follow [operator setup and recovery](docs/setup.md#operator-setup-and-recovery) before running a credential helper. Use an existing App/configuration when present; both setup helpers are first-time tools and refuse to overwrite either local credential file. The public registration helper is at http://127.0.0.1:3002, while runtime sign-in is public and checks each user’s current repository access. Existing Codex/CLI credentials are never copied into the app or deployed.
 
 Use **Explore the interaction lab**, or `http://127.0.0.1:3000/?lab=1`, to try the prototype with explicit mock data. Lab state persists locally and can be reset. Real PR data is never stored in localStorage.
+
+To use the website with your existing GitHub CLI access, start the companion from this checkout and open its printed pairing URL:
+
+```sh
+pnpm companion --repo kernel/your-repository
+```
+
+Replace the example with the repository you want to allow. Keep the helper running; allow the browser's local network permission when prompted. Credentials stay with `gh`, and companion plans stay on this computer. See [companion setup, review actions and limitations](docs/companion.md).
+
+A read-only companion smoke test loaded all 339 open PRs in private `kernel/kernel` in about 50 seconds and fetched reviewer suggestions separately for a selected PR. Large maps have a 120-second request deadline. No GitHub review actions were sent during this check; see [verified companion evidence](docs/companion.md#verified-evidence--2026-10-12).
 
 ## First milestone
 
@@ -60,6 +70,7 @@ Start with the [documentation index and current status](docs/README.md). It orga
 - [Milestones and unresolved decisions](docs/roadmap.md)
 - [Current architecture and production proposals](docs/architecture.md)
 - [Normal user onboarding](docs/setup.md#normal-user-onboarding), [operator setup and recovery](docs/setup.md#operator-setup-and-recovery), and [dated deployment evidence](docs/deployment.md)
+- [Local GitHub CLI companion](docs/companion.md)
 
 The [original uploaded plan](docs/product-plan.md) is preserved unchanged, 19,188 bytes. Later user choices select vinext, Cloudflare hosting and real GitHub integration. The intended MVP includes live progressive-review actions; the gated service has passed a scoped real pilot, with delivery reliability and broader launch hardening still open.
 

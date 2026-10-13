@@ -201,3 +201,8 @@
 .coordination-feature{display:grid;gap:8px;padding-top:12px;border-top:1px solid #e7e2ed}
 .review-preview{display:grid;gap:10px;padding:12px;background:#f5f2fa;border:1px solid #ded7ec;border-radius:10px;font-size:12px;line-height:1.55}
 .review-preview p{margin:0}.coordination-check{display:flex;gap:8px;align-items:center}
+.companion-connection{display:grid;gap:9px;margin:16px 0;padding-top:15px;border-top:1px solid #edeaf1;font-size:11px;color:#887498;line-height:1.65}
+.companion-connection>strong{display:flex;align-items:center;gap:7px}.companion-connection p{margin:0}.companion-start{justify-content:center;width:100%}
+.companion-instructions{display:grid;gap:9px}.companion-instructions code{display:block;padding:9px 11px;border:1px solid #e6dfef;border-radius:7px;background:#f7f4fa;font-size:10px;color:#655471;white-space:pre-wrap;overflow-wrap:anywhere}
+.companion-instructions label{display:grid;gap:5px}.companion-instructions input{width:100%;min-width:0;padding:9px;border:1px solid #ded9e7;border-radius:7px;background:#fff;font:inherit}.companion-instructions small{font-size:9px;color:#a392b1}
+.map-connect-card:has(.companion-instructions){max-height:calc(100dvh - 120px);overflow:auto}.map-app .setup-modal{max-height:calc(100dvh - 60px);overflow:auto}

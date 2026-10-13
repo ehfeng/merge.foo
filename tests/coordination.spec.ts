@@ -1,5 +1,8 @@
 import {test,expect} from '@playwright/test';
 import {createFixture} from '../src/domain/fixtures';
+test.beforeEach(async({page})=>{
+  await page.route('**/api/github/reviewers?*',route=>route.request().method()==='GET'?route.fulfill({json:{suggestedReviewers:[],reviewers:[]}}):route.fallback());
+});
 test('connected settings persist; release preview names recipients and requires an explicit early override',async({page})=>{
   let fixture=createFixture();fixture.workflowVersion=0;fixture.prs.forEach(p=>{p.canEditPlan=true;p.author='alice';p.plannedReviewerIdentities=p.plannedReviewerIds.map(login=>({login,id:String(['elena','noah','maya'].indexOf(login)+1)}));p.planVersion=0;p.workflow={enrolled:true,manualOverride:false,pending:false,uncertain:false};});fixture.stacks.forEach(s=>s.enrolled=true);
   const commands:Record<string,unknown>[]=[];

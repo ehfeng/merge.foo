@@ -1,9 +1,17 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
-import {normalize,fetchRepository,repositories,validateRepositoryAccess} from './github';
+import {normalize,fetchRepository,fetchRepositoryWith,fetchReviewerSuggestions,repositories,validateRepositoryAccess} from './github';
 import {isApproved,outstanding,stateOf} from '../domain/engine';
 const pr=(number:number,head:string,base='main',more:Record<string,unknown>={})=>({id:`github-${number}`,number,title:`PR ${number}`,url:`https://github.com/acme/platform/pull/${number}`,bodyText:'Description',isDraft:false,headRefName:head,baseRefName:base,headRepository:{id:'repo-node',nameWithOwner:'acme/platform'},baseRepository:{id:'repo-node',nameWithOwner:'acme/platform'},additions:10,deletions:2,reviewDecision:'REVIEW_REQUIRED',mergeable:'UNKNOWN',author:{login:'ehfeng'},statusCheckRollup:null,reviews:{nodes:[]},reviewRequests:{nodes:[]},timelineItems:{nodes:[]},labels:{nodes:[]},...more});
 const normalizeTest=(nodes:ReturnType<typeof pr>[],truncated=false)=>normalize(nodes as Parameters<typeof normalize>[0],'acme/platform',truncated);
 describe('GitHub read-only normalization',()=>{
+  it('loads selected reviewer suggestions in GitHub order without assigning or notifying anyone',async()=>{
+    const graph=vi.fn(async()=>({node:{__typename:'PullRequest',repository:{databaseId:9},suggestedReviewers:[{reviewer:{login:'zoe'},isAuthor:true,isCommenter:false},{reviewer:{login:'amy'},isAuthor:false,isCommenter:true}]}}));
+    const result=await fetchReviewerSuggestions({id:9,installationId:1,full_name:'acme/platform',private:true},'PR1',{request:async()=>{throw new Error('Suggestions must not perform REST writes');},graph:graph as never});
+    expect(result.suggestedReviewers.map(s=>s.reviewerId)).toEqual(['zoe','amy']);expect(result.reviewers.map(r=>r.id)).toEqual(['zoe','amy']);expect(graph).toHaveBeenCalledTimes(1);
+  });
+  it('rejects reviewer suggestions for a pull request outside the authorized repository',async()=>{
+    await expect(fetchReviewerSuggestions({id:9,installationId:1,full_name:'acme/platform',private:true},'PR1',{request:async()=>{throw new Error('No REST calls');},graph:(async()=>({node:{__typename:'PullRequest',repository:{databaseId:10},suggestedReviewers:[]}})) as never})).rejects.toMatchObject({status:404});
+  });
   it('uses reliable branch relationships and disables automation on connection',()=>{const {workspace}=normalizeTest([pr(1,'base'),pr(2,'tip','base'),pr(3,'other')]);expect(workspace.stacks).toHaveLength(2);expect(workspace.prs[1].parentId).toBe('github-1');expect(workspace.stacks.every(s=>!s.autoProgress)).toBe(true);expect(workspace.prs.every(p=>!p.plannedReviewerIds.length)).toBe(true);});
   it('does not guess among ambiguous branches',()=>{const {workspace,warnings}=normalizeTest([pr(1,'base'),pr(2,'base'),pr(3,'tip','base')]);expect(workspace.prs[2].parentId).toBeUndefined();expect(warnings.join(' ')).toContain('ambiguous');});
   it('does not fabricate request age from PR creation',()=>{const {workspace}=normalizeTest([pr(1,'base','main',{reviewRequests:{nodes:[{requestedReviewer:{login:'reviewer'}}]}})]);expect(workspace.prs[0].requests[0].requestedAt).toBe('');});
@@ -17,6 +25,15 @@ describe('GitHub read-only normalization',()=>{
 describe('full repository ingestion',()=>{
   afterEach(()=>vi.unstubAllGlobals());
   const session={token:'test',userId:'1',login:'alice',expires:Date.now()+10000};
+  it('loads a directly authorized repository through gh without an App installation or exported token',async()=>{
+    const directFetch=vi.fn(()=>{throw new Error('Local reads must use the supplied API');});vi.stubGlobal('fetch',directFetch);
+    const query=vi.fn(async(query:string)=>({repository:{viewerPermission:'READ',pullRequests:{
+      nodes:query.includes('Ancestry')?[]:[pr(1,'feature','main',{author:{login:'alice'}}),pr(2,'other','main',{author:{login:'bob'}})],
+      pageInfo:{hasNextPage:false,endCursor:null},
+    }}}));
+    const result=await fetchRepositoryWith({id:1,login:'alice'},{id:9,installationId:1,full_name:'acme/platform',private:true},{request:async()=>{throw new Error('No installation discovery required');},graph:query as never});
+    expect(result.workspace.prs.map(p=>p.canEditPlan)).toEqual([true,false]);expect(directFetch).not.toHaveBeenCalled();expect(query).toHaveBeenCalledTimes(2);
+  });
   const mock=(pages:Record<string,unknown>[])=>{let count=0;const fetcher=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input);if(url.endsWith('/user/installations?per_page=100&page=1'))return Response.json({installations:[{id:8}]});if(url.includes('/user/installations/8/repositories'))return Response.json({repositories:[{id:1,full_name:'acme/platform',private:false}]});if(url.endsWith('/graphql')){const body=JSON.parse(String(init?.body));if(body.query.includes('Ancestry'))return Response.json({data:{repository:{viewerPermission:'WRITE',pullRequests:{nodes:[],pageInfo:{hasNextPage:false,endCursor:null}}}}});return Response.json({data:pages[count++]});}throw new Error('Unexpected test URL '+url);});vi.stubGlobal('fetch',fetcher);return fetcher;};
   it('completes raw pagination before excluding archived repositories across installations',async()=>{
     const publicRepo={id:101,full_name:'owner/active-public',private:false,archived:false};const privateRepo={id:102,full_name:'owner/active-private',private:true,archived:false};
@@ -50,7 +67,7 @@ describe('full repository ingestion',()=>{
   });
   it('fails instead of returning a partial graph when cursors stop advancing',async()=>{mock([{repository:{viewerPermission:'READ',pullRequests:{nodes:[pr(1,'a')],pageInfo:{hasNextPage:true,endCursor:null}}}}]);await expect(fetchRepository(session,'acme/platform')).rejects.toThrow('pagination could not complete');});
   it('uses merged matching ancestry and limits read users to their own PR plan',async()=>{
-    vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input);if(url.includes('/user/installations?'))return Response.json({installations:[{id:8}]});if(url.includes('/repositories?'))return Response.json({repositories:[{id:1,full_name:'acme/platform',private:false}]});const ancestry=String(init?.body).includes('Ancestry');return Response.json({data:{repository:{viewerPermission:'READ',pullRequests:{nodes:ancestry?[pr(1,'a','main',{state:'MERGED'})]:[pr(2,'b','a',{author:{login:'alice'}}),pr(3,'other','main',{author:{login:'bob'}})],pageInfo:{hasNextPage:false,endCursor:null}}}}});}));
+    vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input);if(url.includes('/user/installations?'))return Response.json({installations:[{id:8}]});if(url.includes('/repositories?'))return Response.json({repositories:[{id:1,full_name:'acme/platform',private:false}]});if(String(init?.body).includes('WorkMapAncestors'))return Response.json({data:{nodes:[{...pr(1,'a','main',{state:'MERGED'}),repository:{databaseId:1}}]}});const ancestry=String(init?.body).includes('Ancestry');return Response.json({data:{repository:{viewerPermission:'READ',pullRequests:{nodes:ancestry?[pr(1,'a','main',{state:'MERGED'})]:[pr(2,'b','a',{author:{login:'alice'}}),pr(3,'other','main',{author:{login:'bob'}})],pageInfo:{hasNextPage:false,endCursor:null}}}}});}));
     const {workspace,warnings}=await fetchRepository(session,'acme/platform');expect(workspace.prs.find(p=>p.number===1)?.lifecycle).toBe('merged');expect(workspace.prs.find(p=>p.number===2)?.canEditPlan).toBe(true);expect(workspace.prs.find(p=>p.number===3)?.canEditPlan).toBe(false);expect(warnings.join(' ')).toContain('100 most recently');
   });
   it('does not connect a fork branch to an unrelated repository branch',()=>{const {workspace}=normalizeTest([pr(1,'base','main',{headRepository:{id:'fork-node',nameWithOwner:'bob/platform'}}),pr(2,'tip','base')]);expect(workspace.prs[1].parentId).toBeUndefined();});

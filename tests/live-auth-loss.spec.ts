@@ -5,6 +5,7 @@ function view(){const fixture=createFixture();fixture.workflowVersion=0;fixture.
 async function connected(page:Page){
   await page.route('**/api/session',route=>route.fulfill({json:{configured:true,authenticated:true,login:'alice'}}));
   await page.route('**/api/github/repositories',route=>route.fulfill({json:{repositories:[repo]}}));
+  await page.route('**/api/github/reviewers?*',route=>route.fulfill({json:{suggestedReviewers:[],reviewers:[]}}));
 }
 async function selectRepository(page:Page){await page.goto('/');await page.getByRole('combobox',{name:'Repository'}).selectOption(repo.full_name);await expect(page.getByTestId('pr-145')).toBeVisible();}
 async function editPlan(page:Page,number=145){await page.getByRole('dialog',{name:`Details for #${number}`}).getByRole('button',{name:`Reviewers for #${number}`}).click();await page.getByRole('dialog',{name:`Reviewer plan for #${number}`}).getByRole('checkbox').first().click();}

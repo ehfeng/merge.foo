@@ -1,10 +1,12 @@
 # User onboarding and operator setup
 
-The public product uses one operator-owned merge.foo GitHub App. Developers sign in to that existing App; they do not register an App, handle its client secret, run setup scripts, or configure Cloudflare.
+The public product offers the operator-owned merge.foo GitHub App and a [local GitHub CLI companion](companion.md). The App route uses GitHub sign-in and installed repository grants. The companion uses your existing `gh` login on your computer for explicitly selected repositories, without a merge.foo App installation. Developers do not register an App, handle its client secret or configure Cloudflare.
 
 ## Normal user onboarding
 
-The target flow is:
+For repositories where the merge.foo App cannot be installed, follow [local companion setup](companion.md). Start `pnpm companion --repo OWNER/REPOSITORY`, open its pairing URL and allow the browser's local network permission. This connection has its own local plans and workflow history. Current GitHub user permissions and organization policies still apply.
+
+The GitHub App flow is:
 
 1. Open hosted merge.foo and choose **Continue with GitHub**.
 2. Authorize the existing merge.foo App for your GitHub account. Use **Install or manage repository access**, or **Connect repository** beside the map's repository picker, to choose a personal account or organization and the repositories to connect in GitHub.
