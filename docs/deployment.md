@@ -1,5 +1,12 @@
 # Deployment and verification
 
+## Current webhook deadline and diagnostics — 2026-10-12
+
+Worker 738c555f-8629-4bd5-b0b5-764b2814dc34 runs the bounded native receipt path from source 9b949e6. One seven-second deadline covers body, HMAC and persistence; only confirmed durable receipts receive 202. Diagnostics use the existing operator secret, exact repository scope and at most 20 UUID reads; they never execute workflows or change stored state. Persistent invocation logs redact query strings. Existing bindings, migration, secrets, domain and paused review actions are retained.
+
+TypeScript, 289 unit tests, 161 real workerd/SQLite synthetic requests, a fresh Cloudflare build and deployment preflight passed. The five old failed deliveries replayed as 202, and one fresh GitHub PR-edit notification persisted with total Worker wall 192ms. Original delivery records all expired at ten seconds with empty responses; the exact old stalled stage remains unobserved. See [receipt repair and evidence](pilot.md#current-receipt-repair-and-pilot-cleanup--2026-10-12).
+
+
 ## Current repository archive filter — 2026-10-12
 
 `79ac8c5a-8531-4952-aa62-47979df51655` excludes archived repositories from the server-provided picker and fresh repository access validation. Pagination completes before filtering; active public/private repositories remain eligible. TypeScript, 198 unit tests, independent focused checks and a fresh Cloudflare build pass. The app returns HTTPS 200. Installation grants, saved data and paused automation are preserved; [onboarding.md](onboarding.md) records the behavior and verification boundaries.

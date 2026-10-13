@@ -7,16 +7,49 @@
   ],
   "main": "src/worker.ts",
   "workers_dev": true,
-  "routes": [{"pattern": "merge.foo", "custom_domain": true}],
+  "routes": [
+    {
+      "pattern": "merge.foo",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "APP_ORIGIN_ALIASES": "[\"https://merge.foo\",\"https://merge-foo.eric.workers.dev\"]"
   },
-  "durable_objects": {"bindings": [{"name": "PLANNED_ASSIGNMENTS", "class_name": "PlannedAssignments"}]},
-  "migrations": [{"tag": "v1-planned-assignments", "new_sqlite_classes": ["PlannedAssignments"]}],
-  "triggers": {"crons": ["* * * * *"]},
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PLANNED_ASSIGNMENTS",
+        "class_name": "PlannedAssignments"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-planned-assignments",
+      "new_sqlite_classes": [
+        "PlannedAssignments"
+      ]
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
     "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    }
   }
 }

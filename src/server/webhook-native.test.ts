@@ -4,7 +4,7 @@ const postgres=vi.hoisted(()=>({query:vi.fn(async()=>{throw new Error('Fixture d
 vi.mock('./state/postgres',()=>({neonQuery:postgres.query,PostgresStateStore:class {}}));
 const secret='native-webhook-fixture-secret-at-least-32-characters';
 const scopes='[{"id":42,"installationId":7,"full_name":"owner/repo"}]';
-afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();vi.clearAllMocks();});
+afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();vi.unstubAllGlobals();vi.clearAllMocks();});
 async function request(event='pull_request_review') {
   const body=JSON.stringify({installation:{id:7},repository:{id:42,full_name:'owner/repo',private:false}});
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
@@ -40,4 +40,14 @@ it('honors the explicit PostgreSQL selection and fails without acknowledging mis
 it('ignores signed ping without requiring state and rejects missing configuration',async()=>{
   expect((await nativeWebhookIngress(await request('ping'),{GITHUB_WEBHOOK_SECRET:secret}))?.status).toBe(202);
   expect((await nativeWebhookIngress(await request('ping'),{}))?.status).toBe(503);
+});
+
+it('logs native ingress and outcome using only safe structured receipt metadata',async()=>{
+  const log=vi.spyOn(console,'info').mockImplementation(()=>{});
+  const input=await request('ping');expect((await nativeWebhookIngress(input,{GITHUB_WEBHOOK_SECRET:secret}))?.status).toBe(202);
+  expect(log).toHaveBeenCalledTimes(2);
+  const entries=log.mock.calls.map(([value])=>JSON.parse(String(value)));
+  expect(entries[0]).toMatchObject({event:'github_webhook_receipt',phase:'entry',stage:'entry',delivery:'12345678-1234-1234-1234-123456789abc'});
+  expect(entries[1]).toMatchObject({event:'github_webhook_receipt',phase:'outcome',stage:'complete',status:202});
+  expect(JSON.stringify(entries)).not.toMatch(/native-webhook-fixture|sha256|owner\/repo|private/);
 });
