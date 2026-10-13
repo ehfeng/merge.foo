@@ -1,2 +1,2 @@
 merge.foo live review pilot
-Stage: B
+Stage: C
