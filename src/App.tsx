@@ -35,6 +35,13 @@ export default function App() {
     setWorkspace(data);setMode('lab');setSelected(null);setView('graph');setError('');setWarnings([]);history.replaceState(null,'','?lab=1');
   }
   const clearRepositoryView=useCallback(()=>{requestEpoch.current++;selectedRepository.current=null;setRepository('');setWorkspace(null);setCoordination(undefined);setSelected(null);setWarnings([]);setBusy(false);setQuery('');setView('graph');setRepoListError(false);},[]);
+  const clearAuthentication=useCallback((message='Sign in again to continue.')=>{
+    authenticated.current=false;authEpoch.current++;repoListEpoch.current++;installReturnPending.current=false;
+    repoRefresh.current?.controller.abort();repoRefresh.current=null;repositoryList.current=[];setRepos([]);
+    clearRepositoryView();setRepoLoading(false);setMode('connect');setNotice('');setTools(false);
+    setAuth(value=>({configured:value?.configured??false,authenticated:false,installationUrl:value?.installationUrl}));
+    setError(message);
+  },[clearRepositoryView]);
   const refreshRepositories=useCallback((afterInstallation=false):Promise<void>=>{
     if(!authenticated.current)return Promise.resolve();
     const authGeneration=authEpoch.current;
@@ -45,8 +52,9 @@ export default function App() {
     const promise=Promise.resolve().then(async()=>{
       try {
         if(!current())return;
-        const response=await fetch('/api/github/repositories',{cache:'no-store',signal:controller.signal});const result=await response.json();if(!current())return;
-        if(response.status===401){authenticated.current=false;authEpoch.current++;repoListEpoch.current++;installReturnPending.current=false;repositoryList.current=[];setRepos([]);clearRepositoryView();setMode('connect');setAuth(value=>value?{...value,authenticated:false}:value);setError('Sign in again to refresh repository access.');return;}
+        const response=await fetch('/api/github/repositories',{cache:'no-store',signal:controller.signal});if(!current())return;
+        if(response.status===401){clearAuthentication('Sign in again to refresh repository access.');return;}
+        const result=await response.json();if(!current())return;
         if(!response.ok)throw new Error(result.error??'Could not refresh repository access.');
         if(!Array.isArray(result.repositories))throw new Error('Could not read the accessible repository list.');
         const next=result.repositories as Repo[];repositoryList.current=next;setRepos(next);
@@ -56,7 +64,7 @@ export default function App() {
       finally{if(repoRefresh.current?.epoch===generation){const queued=repoRefresh.current.afterInstallation;repoRefresh.current=null;if(queued&&current())void refreshRepositories();else setRepoLoading(false);}}
     });
     repoRefresh.current={auth:authGeneration,epoch:generation,controller,promise};return promise;
-  },[clearRepositoryView]);
+  },[clearRepositoryView,clearAuthentication]);
   const installationOpened=()=>{installReturnPending.current=true;};
   useEffect(()=>{const returned=()=>{if(document.visibilityState==='visible'&&installReturnPending.current&&authenticated.current){installReturnPending.current=false;void refreshRepositories(true);}};window.addEventListener('focus',returned);document.addEventListener('visibilitychange',returned);return()=>{window.removeEventListener('focus',returned);document.removeEventListener('visibilitychange',returned);};},[refreshRepositories]);
   useEffect(()=>{let active=true;const generation=authEpoch.current;
@@ -76,20 +84,20 @@ export default function App() {
   async function loadRepo(name:string) {
     selectedRepository.current=repositoryList.current.find(repo=>repo.full_name===name)??null;
     const generation=++requestEpoch.current;setRepository(name);setBusy(true);setRepoListError(false);setError('');setSelected(null);setWorkspace(null);setCoordination(undefined);setMode('live');history.replaceState(null,'','/');
-    try {const response=await fetch(`/api/github/workspace?repository=${encodeURIComponent(name)}`);const data=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(data.error);setWorkspace(data.workspace);setCoordination(data.coordination);if(data.viewerLogin)setAuth(current=>current?{...current,login:data.viewerLogin}:current);setWarnings(data.warnings??[]);}
+    try {const response=await fetch(`/api/github/workspace?repository=${encodeURIComponent(name)}`);if(generation!==requestEpoch.current)return;if(response.status===401){clearAuthentication();return;}const data=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(data.error);setWorkspace(data.workspace);setCoordination(data.coordination);if(data.viewerLogin)setAuth(current=>current?{...current,login:data.viewerLogin}:current);setWarnings(data.warnings??[]);}
     catch(err){if(generation===requestEpoch.current){setRepoListError(false);setWorkspace(null);setError(err instanceof Error?err.message:'GitHub unavailable.');}}finally{if(generation===requestEpoch.current)setBusy(false);}
   }
   async function savePlan(prId:string,reviewerIds:string[]) {
     const pr=workspace?.prs.find(p=>p.id===prId);if(!pr?.canEditPlan||savingPlans.current.has(prId)||savingWorkflow.current)return;
     const generation=requestEpoch.current;const repo=repository;savingPlans.current.add(prId);setPlanSaving([...savingPlans.current]);setRepoListError(false);setError('');
-    try{const response=await fetch('/api/github/plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({repository:repo,prId,reviewerIds,version:pr.planVersion??0})});const result=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(result.error);
+    try{const response=await fetch('/api/github/plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({repository:repo,prId,reviewerIds,version:pr.planVersion??0})});if(generation!==requestEpoch.current)return;if(response.status===401){clearAuthentication();return;}const result=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(result.error);
       setWorkspace(current=>{if(!current)return current;const reviewers=[...current.reviewers];for(const id of result.plan.reviewerIds as string[])if(!reviewers.some(r=>r.id===id))reviewers.push({id,name:id,initials:id.slice(0,2).toUpperCase(),color:'#8674bd',specialty:'Planned reviewer'});return {...current,reviewers,prs:current.prs.map(p=>p.id===prId?{...p,plannedReviewerIds:result.plan.reviewerIds,plannedReviewerIdentities:result.plan.reviewerIdentities,planVersion:result.plan.version}:p),activity:[{id:`saved:${prId}:${result.plan.version}`,at:result.plan.updatedAt,prId,stackId:pr.stackId,message:`${result.plan.actor} updated the planned assignment (version ${result.plan.version}).`,kind:'intent'},...current.activity]};});setNotice('Planned assignment saved. No GitHub review request sent.');
     }catch(err){if(generation===requestEpoch.current){setRepoListError(false);setError(err instanceof Error?err.message:'Could not save assignment.');}}finally{savingPlans.current.delete(prId);setPlanSaving([...savingPlans.current]);}
   }
   async function saveWorkflow(command:WorkflowCommand) {
     if(mode!=='live'||!workspace||!coordination||savingWorkflow.current||savingPlans.current.size)return;
     const generation=requestEpoch.current;savingWorkflow.current=true;setWorkflowSaving(true);setRepoListError(false);setError('');
-    try{const target=command.type==='start'?workspace.prs.find(pr=>pr.id===command.prId):undefined;const response=await fetch('/api/github/workflow',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({repository,version:workspace.workflowVersion??0,command,...target?{expectedPlanVersion:target.planVersion??0,expectedReviewers:target.plannedReviewerIdentities??[]}:undefined})});const result=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(result.error);setWorkspace(result.workspace);setCoordination(result.coordination);if(result.viewerLogin)setAuth(current=>current?{...current,login:result.viewerLogin}:current);setNotice(command.type==='start'?'Review release recorded. Check its activity for confirmed GitHub steps.':command.type==='reconcile'?'Current GitHub state reconciled.':'Review coordination saved.');}
+    try{const target=command.type==='start'?workspace.prs.find(pr=>pr.id===command.prId):undefined;const response=await fetch('/api/github/workflow',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({repository,version:workspace.workflowVersion??0,command,...target?{expectedPlanVersion:target.planVersion??0,expectedReviewers:target.plannedReviewerIdentities??[]}:undefined})});if(generation!==requestEpoch.current)return;if(response.status===401){clearAuthentication();return;}const result=await response.json();if(generation!==requestEpoch.current)return;if(!response.ok)throw new Error(result.error);setWorkspace(result.workspace);setCoordination(result.coordination);if(result.viewerLogin)setAuth(current=>current?{...current,login:result.viewerLogin}:current);setNotice(command.type==='start'?'Review release recorded. Check its activity for confirmed GitHub steps.':command.type==='reconcile'?'Current GitHub state reconciled.':'Review coordination saved.');}
     catch(err){if(generation===requestEpoch.current){setRepoListError(false);setError(err instanceof Error?err.message:'Could not save review coordination.');}}
     finally{savingWorkflow.current=false;setWorkflowSaving(false);}
   }

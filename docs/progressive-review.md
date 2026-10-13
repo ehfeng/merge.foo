@@ -56,6 +56,8 @@ These rules implement conservative proposals from the plan; they still need plat
 | Readiness succeeds but requesting a reviewer fails | Record completed steps; retry only pending steps after rechecking eligibility | Persist an action/outbox record and reconcile ambiguous upstream outcomes |
 | Future plan changes after review starts | Keep active requests and the release-time target snapshot unchanged | Plan edits do not alter active requests; rollback is a separately disclosed automatic action. Other request changes require an explicit action |
 
+After a manual release has completed, an explicit review start freezes the current plan into a new release generation. Pending or uncertain releases must be reconciled first. A completed automatic release keeps its original reviewer targets and rollback ownership: an additional manual start returns an explanation instead of replacing that record. Request additional reviewers directly on GitHub, or save a plan for the next automatic release.
+
 Current code represents a single parent per PR. Rendering can show branches; the user chose to defer branching/multiple-parent automation and allow explicit out-of-order review starts. Manual early starts, attributable rollback and explicit dependency correction are implemented in source with local tests. A merged ancestor satisfies its release gate; handling real merged ancestry remains unverified.
 
 ## Approval and content validity
