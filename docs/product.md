@@ -53,7 +53,7 @@ The prototype uses compact markers, floating search/filter/navigation controls a
 
 One canvas contains disconnected groups for independent stacks. An arrow **A → B means B depends on A**. Topology determines position; review state does not redefine the dependency. Left-to-right orientation is an adopted implementation proposal.
 
-Linear chains use straight, aligned rows. Stack roots share a starting column, and matching dependency depths share columns with consistent spacing. Branches use separate lanes; decorative offsets must not make dependency structure harder to scan.
+Linear chains use straight, aligned rows. Stack roots share a starting column, and matching dependency depths share columns with consistent spacing. Connected PRs and branch rows have a single canvas tick (24 pixels) between cards. Stack headings retain enough clearance to separate features. Branches use separate lanes; decorative offsets must not make dependency structure harder to scan.
 
 Use compact, consistent PR markers. Large changes should not create physically larger markers. Show number/title, review state and compact reviewer/wait/exception cues; expand coordination actions, effort/risk and history in selected details. Status remains understandable through text and shape as well as color.
 

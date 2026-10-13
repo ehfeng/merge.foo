@@ -2,8 +2,9 @@ import type {PullRequest, Workspace} from './types';
 
 export const MAP_NODE_WIDTH = 196;
 export const MAP_NODE_HEIGHT = 72;
-const STEP_X = 274;
-const STEP_Y = 136;
+const PR_GAP = 24;
+const STEP_X = MAP_NODE_WIDTH + PR_GAP;
+const STEP_Y = MAP_NODE_HEIGHT + PR_GAP;
 export type MapPoint = {x: number; y: number};
 export type MapBounds = {x: number; y: number; width: number; height: number};
 export type MapRoute = {stackId: string; label: MapPoint; bounds: MapBounds; nodeIds: string[]};
@@ -53,15 +54,16 @@ export function mapLayout(workspace: Workspace): MapGeometry {
     for(const [id,point] of local)positions.set(id,point);
     const bounds=boundsForNodes(local,prs.map(p=>p.id));
     routes.push({stackId,label:{x:originX,y:bounds.y-48},bounds,nodeIds:prs.map(p=>p.id)});
-    bandY=bounds.y+bounds.height+164;
+    // Leave room for the next stack heading as well as the PR gap.
+    bandY=bounds.y+bounds.height+PR_GAP*3;
   }
   const nodes=boundsForNodes(positions,[...positions.keys()]);
   return {positions,routes,bounds:{x:nodes.x-28,y:nodes.y-72,width:nodes.width+56,height:nodes.height+104}};
 }
 
-export function fitMap(bounds: MapBounds, viewport: {width:number;height:number}, maxZoom=1.18, minZoom=.15) {
+export function fitMap(bounds: MapBounds, viewport: {width:number;height:number}, maxZoom=1.18, minZoom=.15, verticalPadding=60) {
   const padding=60;
-  const zoom=Math.max(minZoom,Math.min(maxZoom,Math.max(1,viewport.width-padding*2)/Math.max(1,bounds.width),Math.max(1,viewport.height-padding*2)/Math.max(1,bounds.height)));
+  const zoom=Math.max(minZoom,Math.min(maxZoom,Math.max(1,viewport.width-padding*2)/Math.max(1,bounds.width),Math.max(1,viewport.height-verticalPadding*2)/Math.max(1,bounds.height)));
   return {zoom,x:viewport.width/2-(bounds.x+bounds.width/2)*zoom,y:viewport.height/2-(bounds.y+bounds.height/2)*zoom};
 }
 /** Keep the same graph coordinate beneath a screen anchor while scaling. */

@@ -50,10 +50,11 @@ export default function WorkMap({workspace,selectedId,query,scope,viewerLogin,on
     if(dx||dy)moveCamera({x:panRef.current.x+dx,y:panRef.current.y+dy});
   }
   function fit(stackId?:string|null){
-    const bounds=stackId?geometry.routes.find(route=>route.stackId===stackId)?.bounds??geometry.bounds:geometry.bounds;const viewport=sizeRef.current;
-    const top=scope==='mine'?Math.min(viewport.width<600?148:166,viewport.height*.25):0;
-    const bottom=scope==='mine'?Math.min(132,viewport.height*.25):0;
-    const next=fitMap(bounds,{width:viewport.width,height:Math.max(1,viewport.height-top-bottom)},1.18,minimumZoomRef.current);
+    const route=stackId?geometry.routes.find(route=>route.stackId===stackId):undefined;const bounds=route?.bounds??geometry.bounds;const viewport=sizeRef.current;
+    const top=Math.min(viewport.width<600?148:166,viewport.height*.25);
+    const bottom=Math.min(132,viewport.height*.25);
+    // Whole-map bounds already include heading clearance; individual routes contain only nodes.
+    const next=fitMap(bounds,{width:viewport.width,height:Math.max(1,viewport.height-top-bottom)},1.18,minimumZoomRef.current,route?60:0);
     zoomRef.current=next.zoom;moveCamera({x:next.x,y:next.y+top});onZoomRef.current(next.zoom);
   }
 
@@ -93,7 +94,7 @@ export default function WorkMap({workspace,selectedId,query,scope,viewerLogin,on
     <div className="map-world" style={{position:'absolute',left:0,top:0,width:geometry.bounds.x+geometry.bounds.width+80,height:geometry.bounds.y+geometry.bounds.height+80,transform:`translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,transformOrigin:'0 0',willChange:'transform'}}>
       <svg className="map-routes" width={geometry.bounds.x+geometry.bounds.width+80} height={geometry.bounds.y+geometry.bounds.height+80} aria-hidden="true" style={{position:'absolute',inset:0,overflow:'visible',pointerEvents:'none'}}>
         <defs><marker id={`map-arrow-${instructions.replaceAll(':','')}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L6 4L1 7" fill="none" stroke="currentColor" strokeWidth="1.3"/></marker></defs>
-        {mapWorkspace.prs.filter(pr=>pr.parentId&&geometry.positions.has(pr.parentId)&&geometry.positions.has(pr.id)).map(pr=>{const from=geometry.positions.get(pr.parentId!)!;const to=geometry.positions.get(pr.id)!;const start={x:from.x+MAP_NODE_WIDTH+8,y:from.y+MAP_NODE_HEIGHT/2};const end={x:to.x-14,y:to.y+MAP_NODE_HEIGHT/2};const bend=Math.max(26,(end.x-start.x)*.48);return <path key={pr.id} className={`map-route ${selectedId&&related.has(pr.id)&&related.has(pr.parentId!)?'selected':''} ${(!visible.has(pr.id)&&!visible.has(pr.parentId!))?'dimmed':''}`} d={`M${start.x},${start.y} C${start.x+bend},${start.y} ${end.x-bend},${end.y} ${end.x},${end.y}`} fill="none" markerEnd={`url(#map-arrow-${instructions.replaceAll(':','')})`}/>;})}
+        {mapWorkspace.prs.filter(pr=>pr.parentId&&geometry.positions.has(pr.parentId)&&geometry.positions.has(pr.id)).map(pr=>{const from=geometry.positions.get(pr.parentId!)!;const to=geometry.positions.get(pr.id)!;const start={x:from.x+MAP_NODE_WIDTH+4,y:from.y+MAP_NODE_HEIGHT/2};const end={x:to.x-4,y:to.y+MAP_NODE_HEIGHT/2};const bend=Math.max(0,end.x-start.x)*.48;return <path key={pr.id} className={`map-route ${selectedId&&related.has(pr.id)&&related.has(pr.parentId!)?'selected':''} ${(!visible.has(pr.id)&&!visible.has(pr.parentId!))?'dimmed':''}`} d={`M${start.x},${start.y} C${start.x+bend},${start.y} ${end.x-bend},${end.y} ${end.x},${end.y}`} fill="none" markerEnd={`url(#map-arrow-${instructions.replaceAll(':','')})`}/>;})}
       </svg>
       {geometry.routes.map(route=>{const stack=workspace.stacks.find(s=>s.id===route.stackId);return <div key={route.stackId} className={`map-route-label ${route.nodeIds.some(id=>visible.has(id))?'':'dimmed'} ${selectedId&&prById.get(selectedId)?.stackId===route.stackId?'selected':''}`} style={{position:'absolute',left:route.label.x,top:route.label.y,pointerEvents:'none'}}><span className="map-route-label-dot"/><strong>{stack?.title??'Related pull requests'}</strong><small>{route.nodeIds.length} PR{route.nodeIds.length===1?'':'s'}</small></div>;})}
       {mapWorkspace.prs.map(pr=>{const point=geometry.positions.get(pr.id)!;const state=stateOf(pr);const requests=outstanding(pr);const reviewerId=requests[0]?.reviewerId??pr.plannedReviewerIds[0];const reviewer=workspace.reviewers.find(person=>person.id===reviewerId);const age=requests[0]?waitingAge(requests[0].requestedAt):null;return <article key={pr.id} data-testid={`pr-${pr.number}`} data-pr-id={pr.id} className={`map-pr state-${state.toLowerCase().replaceAll(' ','-')} ${selectedId===pr.id?'selected':''} ${related.has(pr.id)&&selectedId!==pr.id?'related':''} ${!visible.has(pr.id)?'dimmed':''}`} style={{position:'absolute',left:point.x,top:point.y,width:MAP_NODE_WIDTH,height:MAP_NODE_HEIGHT}}>
