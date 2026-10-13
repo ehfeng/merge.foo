@@ -9,7 +9,13 @@ export type MapBounds = {x: number; y: number; width: number; height: number};
 export type MapRoute = {stackId: string; label: MapPoint; bounds: MapBounds; nodeIds: string[]};
 export type MapGeometry = {positions: Map<string, MapPoint>; routes: MapRoute[]; bounds: MapBounds};
 
-/** Only identities and dependency topology place nodes. Review state and filters never move them. */
+/** Select a map's author without replacing real dependencies with links through hidden PRs. */
+export function mapWorkspaceForAuthor(workspace: Workspace, authorLogin?: string): Workspace {
+  const author=authorLogin?.toLowerCase();
+  return {...workspace,prs:author?workspace.prs.filter(pr=>pr.author.toLowerCase()===author):[]};
+}
+
+/** Only identities and dependency topology place nodes. Review state and text filters never move them. */
 export function mapTopologyKey(workspace: Workspace): string {
   return [...new Set(workspace.prs.map(pr=>pr.repository))].sort().join('|') + ':' +
     workspace.prs.map(pr=>`${pr.id}:${pr.parentId??''}:${pr.stackId}`).sort().join('|');
@@ -53,9 +59,9 @@ export function mapLayout(workspace: Workspace): MapGeometry {
   return {positions,routes,bounds:{x:nodes.x-28,y:nodes.y-72,width:nodes.width+56,height:nodes.height+104}};
 }
 
-export function fitMap(bounds: MapBounds, viewport: {width:number;height:number}, maxZoom=1.18) {
+export function fitMap(bounds: MapBounds, viewport: {width:number;height:number}, maxZoom=1.18, minZoom=.15) {
   const padding=60;
-  const zoom=Math.max(.15,Math.min(maxZoom,Math.max(1,viewport.width-padding*2)/Math.max(1,bounds.width),Math.max(1,viewport.height-padding*2)/Math.max(1,bounds.height)));
+  const zoom=Math.max(minZoom,Math.min(maxZoom,Math.max(1,viewport.width-padding*2)/Math.max(1,bounds.width),Math.max(1,viewport.height-padding*2)/Math.max(1,bounds.height)));
   return {zoom,x:viewport.width/2-(bounds.x+bounds.width/2)*zoom,y:viewport.height/2-(bounds.y+bounds.height/2)*zoom};
 }
 /** Keep the same graph coordinate beneath a screen anchor while scaling. */
