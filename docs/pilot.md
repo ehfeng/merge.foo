@@ -1,5 +1,20 @@
 # Scoped live pilot — 2026-10-12 PDT
 
+## Current receipt repair and pilot cleanup — 2026-10-12
+
+PRs [#1](https://github.com/ehfeng/merge.foo/pull/1), [#2](https://github.com/ehfeng/merge.foo/pull/2) and [#3](https://github.com/ehfeng/merge.foo/pull/3) are now closed without merging; their reviews and history remain. The three closure deliveries all returned 202. Prior open/draft states below are historical pilot evidence.
+
+All five failed delivery records lasted exactly ten seconds and contain no response headers/body. GitHub closes a delivery connection after ten seconds without a response, so the records support delivery timeout rather than a confirmed Worker-generated HTTP 500. [GitHub timeout guidance](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/troubleshooting-webhooks#timed-out)
+
+An authenticated, read-only lookup found durable rows for all five original UUIDs. Their receivedAt values precede four GitHub failure timestamps and follow one; updatedAt is the latest processing change, not proof of initial durable commit time. Historical Cloudflare minute aggregates showed success outcomes and zero recorded runtime errors, but cannot identify the individual delayed stage. Durable Object output-gate latency is a possible mechanism, not an established historical cause.
+
+Source 9b949e6 is deployed as 738c555f-8629-4bd5-b0b5-764b2814dc34. The receiver has one seven-second deadline across body/signature/storage work, returns 202 only after confirmed durability, and returns explicit 503 on expiry. Stalled bodies are cancelled without waiting for a stuck cancellation; late commits deduplicate on redelivery. Query-redacted persistent Worker logs and safe receipt diagnostics now expose the delayed stage. GitHub does not automatically retry failed deliveries; recovery uses explicit redelivery and authoritative polling. [GitHub recovery guidance](https://docs.github.com/en/webhooks/using-webhooks/handling-failed-webhook-deliveries)
+
+With hosted review writes verified false, all five original failed deliveries were replayed successfully. Cloudflare persisted outcome ok/HTTP 202 for each: native receipt 98–334ms, wall 102–336ms, CPU 1–3ms. A fresh natural PR-edit event also persisted and returned 202: native 188ms, wall 192ms, CPU 4ms; GitHub measured 0.39s. The source passes TypeScript, 289 units, 161 real workerd/SQLite synthetic requests (41 distinct/120 duplicates/restart/near 1MB), production build and deployment preflight. See [sanitized evidence](webhook-evidence.json).
+
+This fixes unbounded waits and adds observed successful replay/new-insert evidence. It does not establish the exact old delay or guarantee that every future platform/network delivery succeeds. Review automation remains paused; no new review requests, review decisions or merges were used for the repair verification.
+
+
 This report records the user-approved test on the hosted [merge.foo service](https://merge-foo.eric.workers.dev). The complete scoped review/progression/rollback sequence passed independently, with all PRs left open/unmerged and no pending requests. **Webhook reliability remains unresolved:** two additional deliveries returned 500 after the native mitigation deployed. Automatic progression and global GitHub workflow writes are now off while those failures are investigated. The original exception remains unknown.
 
 ## Verified setup

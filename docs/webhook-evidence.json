@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-12",
+  "workerVersion": "738c555f-8629-4bd5-b0b5-764b2814dc34",
+  "sourceCommit": "9b949e6",
+  "historicalFailures": [
+    {
+      "id": "3847994365236477952",
+      "guid": "e6b72ae0-c6b5-11f1-9905-1d3613243784",
+      "at": "2026-10-13T03:26:49.714Z",
+      "duration": 10,
+      "statusCode": 500,
+      "delivery": "e6b72ae0-c6b5-11f1-9905-1d3613243784",
+      "persisted": true,
+      "receivedAt": "2026-10-13T03:26:40.957Z",
+      "updatedAt": "2026-10-13T03:26:49.560Z",
+      "state": "done",
+      "version": 3
+    },
+    {
+      "id": "3847994377590808576",
+      "guid": "ea14d4d0-c6b5-11f1-9b31-71815fc8c500",
+      "at": "2026-10-13T03:26:55.449Z",
+      "duration": 10,
+      "statusCode": 500,
+      "delivery": "ea14d4d0-c6b5-11f1-9b31-71815fc8c500",
+      "persisted": true,
+      "receivedAt": "2026-10-13T03:26:52.091Z",
+      "updatedAt": "2026-10-13T03:27:09.253Z",
+      "state": "done",
+      "version": 3
+    },
+    {
+      "id": "3847994422153199616",
+      "guid": "f696e522-c6b5-11f1-8f25-50fb04985357",
+      "at": "2026-10-13T03:27:16.18Z",
+      "duration": 10,
+      "statusCode": 500,
+      "delivery": "f696e522-c6b5-11f1-8f25-50fb04985357",
+      "persisted": true,
+      "receivedAt": "2026-10-13T03:27:08.923Z",
+      "updatedAt": "2026-10-13T03:27:40.041Z",
+      "state": "done",
+      "version": 3
+    },
+    {
+      "id": "3847997088184926208",
+      "guid": "da882406-c6b8-11f1-941e-67d299f35542",
+      "at": "2026-10-13T03:47:57.684Z",
+      "duration": 10,
+      "statusCode": 500,
+      "delivery": "da882406-c6b8-11f1-941e-67d299f35542",
+      "persisted": true,
+      "receivedAt": "2026-10-13T03:47:49.433Z",
+      "updatedAt": "2026-10-13T03:48:46.035Z",
+      "state": "done",
+      "version": 3
+    },
+    {
+      "id": "3847997107048808448",
+      "guid": "dfba59d0-c6b8-11f1-84fe-2f1f011be6fa",
+      "at": "2026-10-13T03:48:06.452Z",
+      "duration": 10,
+      "statusCode": 500,
+      "delivery": "dfba59d0-c6b8-11f1-84fe-2f1f011be6fa",
+      "persisted": true,
+      "receivedAt": "2026-10-13T03:48:12.000Z",
+      "updatedAt": "2026-10-13T03:52:39.972Z",
+      "state": "done",
+      "version": 3
+    }
+  ],
+  "historicalRuntimeAggregates": {
+    "windowUtc": "2026-10-13T03:20:00Z/2026-10-13T03:55:00Z",
+    "outcomes": [
+      "success"
+    ],
+    "errors": 0,
+    "coverage": "Minute aggregates do not identify individual failed HTTP deliveries."
+  },
+  "observedReplayAndFreshInvocations": {
+    "success": true,
+    "httpStatus": 200,
+    "queryStatus": "COMPLETED",
+    "dry": true,
+    "from": 1791871349963,
+    "to": 1791872249963,
+    "invocationCount": 6,
+    "eventCount": 18,
+    "abrLevel": 1,
+    "events": [
+      {
+        "timestamp": 1791872197341,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "entry",
+          "stage": "entry",
+          "status": null,
+          "elapsedMs": 0,
+          "errorClass": null,
+          "delivery": "a4c5d560-c6cd-11f1-98bf-1a44bbd41372"
+        }
+      },
+      {
+        "timestamp": 1791872197529,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "outcome",
+          "stage": "complete",
+          "status": 202,
+          "elapsedMs": 188,
+          "errorClass": null,
+          "delivery": "a4c5d560-c6cd-11f1-98bf-1a44bbd41372"
+        }
+      },
+      {
+        "timestamp": 1791872197529,
+        "outcome": "ok",
+        "cpuTimeMs": 4,
+        "wallTimeMs": 192,
+        "responseStatus": 202,
+        "truncated": false
+      },
+      {
+        "timestamp": 1791872071882,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "entry",
+          "stage": "entry",
+          "status": null,
+          "elapsedMs": 0,
+          "errorClass": null,
+          "delivery": "dfba59d0-c6b8-11f1-84fe-2f1f011be6fa"
+        }
+      },
+      {
+        "timestamp": 1791872071992,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "outcome",
+          "stage": "complete",
+          "status": 202,
+          "elapsedMs": 110,
+          "errorClass": null,
+          "delivery": "dfba59d0-c6b8-11f1-84fe-2f1f011be6fa"
+        }
+      },
+      {
+        "timestamp": 1791872071992,
+        "outcome": "ok",
+        "cpuTimeMs": 1,
+        "wallTimeMs": 111,
+        "responseStatus": 202,
+        "truncated": false
+      },
+      {
+        "timestamp": 1791872071704,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "entry",
+          "stage": "entry",
+          "status": null,
+          "elapsedMs": 0,
+          "errorClass": null,
+          "delivery": "da882406-c6b8-11f1-941e-67d299f35542"
+        }
+      },
+      {
+        "timestamp": 1791872071813,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "outcome",
+          "stage": "complete",
+          "status": 202,
+          "elapsedMs": 109,
+          "errorClass": null,
+          "delivery": "da882406-c6b8-11f1-941e-67d299f35542"
+        }
+      },
+      {
+        "timestamp": 1791872071813,
+        "outcome": "ok",
+        "cpuTimeMs": 2,
+        "wallTimeMs": 112,
+        "responseStatus": 202,
+        "truncated": false
+      },
+      {
+        "timestamp": 1791872071370,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "entry",
+          "stage": "entry",
+          "status": null,
+          "elapsedMs": 0,
+          "errorClass": null,
+          "delivery": "f696e522-c6b5-11f1-8f25-50fb04985357"
+        }
+      },
+      {
+        "timestamp": 1791872071468,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "outcome",
+          "stage": "complete",
+          "status": 202,
+          "elapsedMs": 98,
+          "errorClass": null,
+          "delivery": "f696e522-c6b5-11f1-8f25-50fb04985357"
+        }
+      },
+      {
+        "timestamp": 1791872071468,
+        "outcome": "ok",
+        "cpuTimeMs": 3,
+        "wallTimeMs": 102,
+        "responseStatus": 202,
+        "truncated": false
+      },
+      {
+        "timestamp": 1791872071156,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "entry",
+          "stage": "entry",
+          "status": null,
+          "elapsedMs": 0,
+          "errorClass": null,
+          "delivery": "ea14d4d0-c6b5-11f1-9b31-71815fc8c500"
+        }
+      },
+      {
+        "timestamp": 1791872071270,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "outcome",
+          "stage": "complete",
+          "status": 202,
+          "elapsedMs": 114,
+          "errorClass": null,
+          "delivery": "ea14d4d0-c6b5-11f1-9b31-71815fc8c500"
+        }
+      },
+      {
+        "timestamp": 1791872071270,
+        "outcome": "ok",
+        "cpuTimeMs": 2,
+        "wallTimeMs": 116,
+        "responseStatus": 202,
+        "truncated": false
+      },
+      {
+        "timestamp": 1791872070891,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "entry",
+          "stage": "entry",
+          "status": null,
+          "elapsedMs": 0,
+          "errorClass": null,
+          "delivery": "e6b72ae0-c6b5-11f1-9905-1d3613243784"
+        }
+      },
+      {
+        "timestamp": 1791872071225,
+        "outcome": null,
+        "cpuTimeMs": null,
+        "wallTimeMs": null,
+        "responseStatus": null,
+        "truncated": false,
+        "diagnostic": {
+          "phase": "outcome",
+          "stage": "complete",
+          "status": 202,
+          "elapsedMs": 334,
+          "errorClass": null,
+          "delivery": "e6b72ae0-c6b5-11f1-9905-1d3613243784"
+        }
+      },
+      {
+        "timestamp": 1791872071225,
+        "outcome": "ok",
+        "cpuTimeMs": 3,
+        "wallTimeMs": 336,
+        "responseStatus": 202,
+        "truncated": false
+      }
+    ]
+  },
+  "freshGitHubDelivery": {
+    "id": "3848016243447570432",
+    "guid": "a4c5d560-c6cd-11f1-98bf-1a44bbd41372",
+    "at": "2026-10-13T06:16:37.538Z",
+    "event": "pull_request",
+    "action": "edited",
+    "statusCode": 202,
+    "durationSeconds": 0.39,
+    "writesEnabled": false,
+    "receipt": {
+      "delivery": "a4c5d560-c6cd-11f1-98bf-1a44bbd41372",
+      "persisted": true,
+      "receivedAt": "2026-10-13T06:16:37.431Z",
+      "updatedAt": "2026-10-13T06:17:36.577Z",
+      "state": "done",
+      "version": 3
+    }
+  },
+  "reviewWritesEnabled": false,
+  "interpretation": "All five historical failed deliveries lasted ten seconds without response headers/body and have durable receipts. Delivery timeout is strongly supported; the original delayed stage cannot be retrospectively established. Replay and one new insert passed. The seven-second guard bounds application receipt work but cannot prevent DNS/TLS/network delays before Worker entry."
+}

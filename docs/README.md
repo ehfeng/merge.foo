@@ -29,6 +29,8 @@ This documentation reflects the uploaded `merge-foo-product-plan(1).md` and the 
 
 Documentation reviewed on **2026-10-12** against the repository source and existing verification evidence.
 
+The disposable pilot PRs #1–3 are now closed without merging. The native webhook receiver has a seven-second durable-receipt deadline and safe persisted diagnostics. All five earlier delivery failures lasted ten seconds with empty responses; guarded replays and a fresh GitHub notification now return 202. The old delayed stage remains unobserved, and review actions stay paused. See [the current repair and exact evidence](pilot.md#current-receipt-repair-and-pilot-cleanup--2026-10-12).
+
 The primary audience is a developer coordinating the review and release of a complex feature. merge.foo provides a view and coordination layer over GitHub with full repository context; permissions are implementation checks, and read-only users do not require a separate product/role system.
 
 The user now wants the primary UI to feel like an interactive map with a few floating controls, closer to Google Maps than Gmail. The local prototype now implements a full-window pan/zoom map with compact PR markers, floating controls and temporary selected details. Before/after evidence uses the same mock scenario; repository-area layers remain future work.

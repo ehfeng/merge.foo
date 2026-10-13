@@ -34,7 +34,8 @@
     "migrate:state": "node scripts/migrate_state.mjs",
     "test:postgres": "node scripts/test_postgres_runtime.mjs",
     "workflow:reconcile": "node scripts/reconcile_workflows.mjs",
-    "test:host:vercel": "node scripts/test_host_runtime.mjs vercel"
+    "test:host:vercel": "node scripts/test_host_runtime.mjs vercel",
+    "test:webhook": "node scripts/test_webhook_runtime.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
