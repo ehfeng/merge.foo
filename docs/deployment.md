@@ -1,5 +1,12 @@
 # Deployment and verification
 
+## Connected repository automation — 2026-10-13
+
+Source `9921eb1` is deployed; current Worker `5751cd0d-c7c4-4a57-97e6-e3edb19ace89` retains enabled review actions and uses the durable registry with `WORKFLOW_REPOSITORIES=[]`. Existing opted-in pilot records and historical receipts survived migration. The protected dynamic GET scheduler returned zero eligible actions at workflow version 54. A connected non-pilot repository (`ehfeng/ted`) loaded normally with no app errors; no new live feature enrollment or notifications were used for verification.
+
+TypeScript, 347 unit tests, 19 browser checks, 323 real workerd/SQLite requests across two installations, actual PostgreSQL registry restart tests and fresh Cloudflare/Node/Vercel build/runtime checks passed. Independent review found no blockers. See [the current contract](automation.md) and [sanitized deployment evidence](connected-automation-evidence.json). Broader live multi-account notification and capacity coverage remain to validate.
+
+
 ## Current webhook deadline and diagnostics — 2026-10-12
 
 Worker 738c555f-8629-4bd5-b0b5-764b2814dc34 runs the bounded native receipt path from source 9b949e6. One seven-second deadline covers body, HMAC and persistence; only confirmed durable receipts receive 202. Diagnostics use the existing operator secret, exact repository scope and at most 20 UUID reads; they never execute workflows or change stored state. Persistent invocation logs redact query strings. Existing bindings, migration, secrets, domain and paused review actions are retained.
