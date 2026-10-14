@@ -13,7 +13,7 @@ test('installation and list refresh remain available with a populated picker and
   await page.goto('/');await expect(page.getByRole('combobox',{name:'Repository'})).toContainText(repo.full_name);
   await expect(page.getByRole('link',{name:'Install or manage repository access',exact:true})).toHaveAttribute('href',installationUrl);
   await page.getByRole('button',{name:'Refresh repository list',exact:true}).click();await expect(page.getByRole('combobox',{name:'Repository'})).toContainText(added.full_name);
-  await page.getByRole('combobox',{name:'Repository'}).selectOption(repo.full_name);await expect(page.getByTestId('pr-142')).toBeVisible();
+  await page.getByRole('combobox',{name:'Repository'}).selectOption(repo.full_name);await page.getByRole('button',{name:/^All stacks/}).click();await expect(page.getByTestId('pr-142')).toBeVisible();
   await expect(page.getByRole('link',{name:'Connect repository',exact:true})).toHaveAttribute('href',installationUrl);
   await expect(page.getByRole('button',{name:'Refresh repository list',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Refresh repository list',exact:true}).click();await expect.poll(()=>reads).toBe(3);await expect(page.getByTestId('pr-142')).toBeVisible();

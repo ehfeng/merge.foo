@@ -1,21 +1,34 @@
 # Deployment and verification
 
-## Current webhook deadline and diagnostics — 2026-10-12
+## Current release — 2026-10-13
+
+Production Worker `dd9f9c21-61af-46fd-a0d2-81c5179c11db` serves application source `635139b` at **https://merge.foo**. The consolidation into main preserves that application code and adds the earlier automation deployment evidence. Companion CLI `0.2.3` includes smaller adaptive GraphQL reads and explicit stale-lock repair. Repository maps default to My work, hide other authors, fit the remaining PRs, use trackpad scrolling to pan and pinching to zoom, and place adjacent PRs one 24-pixel canvas tick apart.
+
+The release was checked with TypeScript, 496 unit tests across the companion/map updates, 64 browser checks for compact spacing, and final focused geometry/map/gesture checks after fitting was adjusted to keep headings clear of controls. The live client bundle and unchanged companion download were verified against the published build. Consolidation itself changes only documentation; it does not redeploy or alter GitHub actions, saved state, credentials, or runtime configuration.
+
+## Connected repository automation checkpoint — 2026-10-13
+
+At this checkpoint, source `9921eb1` was deployed as Worker `5751cd0d-c7c4-4a57-97e6-e3edb19ace89`, retaining enabled review actions and using the durable registry with `WORKFLOW_REPOSITORIES=[]`. Existing opted-in pilot records and historical receipts survived migration. The protected dynamic GET scheduler returned zero eligible actions at workflow version 54. A connected non-pilot repository (`ehfeng/ted`) loaded normally with no app errors; no new live feature enrollment or notifications were used for verification.
+
+TypeScript, 347 unit tests, 19 browser checks, 323 real workerd/SQLite requests across two installations, actual PostgreSQL registry restart tests and fresh Cloudflare/Node/Vercel build/runtime checks passed. Independent review found no blockers. See [the current contract](automation.md) and [sanitized deployment evidence](connected-automation-evidence.json). Broader live multi-account notification and capacity coverage remain to validate.
+
+
+## Webhook deadline and diagnostics checkpoint — 2026-10-12
 
 Worker 738c555f-8629-4bd5-b0b5-764b2814dc34 runs the bounded native receipt path from source 9b949e6. One seven-second deadline covers body, HMAC and persistence; only confirmed durable receipts receive 202. Diagnostics use the existing operator secret, exact repository scope and at most 20 UUID reads; they never execute workflows or change stored state. Persistent invocation logs redact query strings. Existing bindings, migration, secrets, domain and paused review actions are retained.
 
 TypeScript, 289 unit tests, 161 real workerd/SQLite synthetic requests, a fresh Cloudflare build and deployment preflight passed. The five old failed deliveries replayed as 202, and one fresh GitHub PR-edit notification persisted with total Worker wall 192ms. Original delivery records all expired at ten seconds with empty responses; the exact old stalled stage remains unobserved. See [receipt repair and evidence](pilot.md#current-receipt-repair-and-pilot-cleanup--2026-10-12).
 
 
-## Current repository archive filter — 2026-10-12
+## Repository archive filter checkpoint — 2026-10-12
 
 `79ac8c5a-8531-4952-aa62-47979df51655` excludes archived repositories from the server-provided picker and fresh repository access validation. Pagination completes before filtering; active public/private repositories remain eligible. TypeScript, 198 unit tests, independent focused checks and a fresh Cloudflare build pass. The app returns HTTPS 200. Installation grants, saved data and paused automation are preserved; [onboarding.md](onboarding.md) records the behavior and verification boundaries.
 
-## Current public repository connection — 2026-10-12
+## Public repository connection checkpoint — 2026-10-12
 
 Self-service repository connection and list refresh are deployed as `aa060e17-df05-4930-885f-38b20bc47872`. Connection links remain available with existing repositories; GitHub handles each user's grant. Return/manual refresh preserves authorized work and safely handles revocation, expired identity and transient errors. TypeScript, 196 units, 31 browser behavior checks and fresh Cloudflare/Node/Vercel builds/runtime probes pass. [Onboarding evidence](onboarding.md) records scope and limitations. No installation grants, background scope or paused automation settings were changed.
 
-## Current production domain — 2026-10-12
+## Production domain checkpoint — 2026-10-12
 
 The user-purchased domain **https://merge.foo** routes to the existing Worker with valid TLS. The old address redirects to it. Exact GitHub callbacks/homepage and canonical OAuth are configured; real sign-in, repository data and same-origin logout are verified. At that cutover, TypeScript, 184 units, 14 setup tests and provider builds passed. The later setup-copy version `dc04889e-896e-4802-ad2f-21a97af916c5` corrected permission wording; the current self-service version is recorded above. See [domain evidence](domain.md). Workflow automation remains paused; these changes do not resolve earlier webhook failures or expand installation access.
 

@@ -53,13 +53,13 @@ The prototype uses compact markers, floating search/filter/navigation controls a
 
 One canvas contains disconnected groups for independent stacks. An arrow **A → B means B depends on A**. Topology determines position; review state does not redefine the dependency. Left-to-right orientation is an adopted implementation proposal.
 
-Linear chains use straight, aligned rows. Stack roots share a starting column, and matching dependency depths share columns with consistent spacing. Branches use separate lanes; decorative offsets must not make dependency structure harder to scan.
+Linear chains use straight, aligned rows. Stack roots share a starting column, and matching dependency depths share columns with consistent spacing. Connected PRs and branch rows have a single canvas tick (24 pixels) between cards. Stack headings retain enough clearance to separate features. Branches use separate lanes; decorative offsets must not make dependency structure harder to scan.
 
 Use compact, consistent PR markers. Large changes should not create physically larger markers. Show number/title, review state and compact reviewer/wait/exception cues; expand coordination actions, effort/risk and history in selected details. Status remains understandable through text and shape as well as color.
 
-Selecting a PR highlights upstream prerequisites and downstream dependents and opens temporary details, with a bottom drawer on mobile. Connected plans, holds, dependency corrections and explicit review previews use current permission checks. Actual effects require operator enablement and enrolled intent; the scoped pilot verified holds, progression and rollback. Filters preserve spatial context. The reader includes bounded recent merged ancestry and discloses its coverage.
+Selecting a PR highlights upstream prerequisites and downstream dependents and opens temporary details, with a bottom drawer on mobile. Connected plans, holds, dependency corrections and explicit review previews use current permission checks. Actual effects require operator enablement and enrolled intent; the scoped pilot verified holds, progression and rollback. Repository maps open in My work, which hides other authors’ PRs and fits the remaining map; All stacks restores the full map. Refreshing preserves a chosen filter. Search and Needs attention preserve spatial context. The reader includes bounded recent merged ancestry and discloses its coverage.
 
-The lab verifies these interactions with nine PRs. Its layout is an HTML/CSS canvas with SVG connections and a topology-only layout function, not Mermaid. Branch siblings can occupy separate lanes; that rendering support is not validation of production branching automation.
+Two-finger scrolling pans the canvas horizontally and vertically. Pinching zooms around the gesture position; touch pinches can move the canvas at the same time. Ctrl/Cmd-scroll also zooms. The lab verifies these interactions with nine PRs. Its layout is an HTML/CSS canvas with SVG connections and a topology-only layout function, not Mermaid. Branch siblings can occupy separate lanes; that rendering support is not validation of production branching automation.
 
 ### Planned assignments and reviewer continuity
 

@@ -58,7 +58,8 @@ Planning sends no GitHub notifications. Stacks begin with automation off; enroll
 - **Wrong account:** stop the companion, run `gh auth switch --hostname github.com --user USER`, then reconnect. Saved state is scoped to the GitHub user and repository identity.
 - **Repository missing:** check `gh repo view OWNER/REPOSITORY` and your SSO grants. Select its exact name with `--repo`; archived repositories cannot be selected.
 - **Browser cannot connect:** keep the terminal running and use its latest pairing link. Allow local-network access for merge.foo in browser site settings. Chrome/Edge are the verified browser targets; see [Local Network Access](https://developer.chrome.com/blog/local-network-access).
-- **Directory locked after a crash:** verify the prior process has exited before removing only `process.lock`; preserve `state.json`. Normal shutdown removes the lock automatically.
+- **GraphQL WorkMap 502/504 after about 10 seconds:** GitHub timed out an expensive page. Companion 0.2.2 uses smaller pages and bounded recovery while retaining complete open-PR coverage. Stop the companion with Ctrl+C, run the installer again, restart `mergefoo connect`, and use its new pairing link.
+- **Saved plans folder locked:** run `mergefoo doctor` to see the lock's PID and status. Doctor is read-only. Stop a running companion with Ctrl+C in its original terminal. If its recorded process has exited, run `mergefoo repair` to remove only the stale process lock. Saved plans remain untouched. Both commands accept `--state-dir /absolute/private/path` when using a custom folder. Safe repair is supported on macOS/Linux; uncertain ownership, live PIDs, malformed records and concurrent repairs are retained.
 
 Run the installer again to update the executable. Windows users can download the versioned `.mjs` executable identified by `https://merge.foo/cli/latest.json` and run it with Node; the shell installer is for macOS/Linux.
 
@@ -87,3 +88,21 @@ Kernel review actions and automatic progression have not been exercised live thr
 The first standalone release replaces checkout-based user setup with an installer and guided CLI. The website exposes Local companion and GitHub App choices directly at login, copyable installation/start commands, and an explicit Connect this computer handoff.
 
 The release passed 355 unit tests, all 52 browser cases, a production build, and installer smoke tests in a temporary directory without a repository or node_modules. The smoke tests cover checksum failures, quoted paths, private file permissions, upgrades, rollback and missing prerequisites. The bundled doctor command also verified the existing `ehfeng` GitHub CLI login without starting a connection or changing GitHub.
+
+## Deployment restoration 0.2.1 — 2026-10-13
+
+A later deployment from the hosted automation branch replaced the companion release with its older onboarding and omitted the CLI downloads. The restored release combines both implementations, preserves feature opt-in and hosted scheduling, and adds the bounded scan required by the companion store's updated interface.
+
+Signed-in onboarding now places **Use local companion** above the repository chooser so it is visible without scrolling on desktop and mobile. The bundled CLI is version 0.2.1; the published 0.2.0 download is retained. Verification passed 422 unit tests, 54 browser cases, the production build, and isolated installer checks. The signed-in screenshots use mocked sessions and repositories.
+
+## GraphQL timeout recovery 0.2.2 — 2026-10-13
+
+Large repository maps now read 20 PRs per page instead of 50. GitHub's [10-second GraphQL deadline](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api#timeouts) can return 502 or 504 for expensive nested queries. An explicitly classified deadline or resource failure retries the same page with 10, then 5, then 1 PR; later pages retain the reduced size. All fields and the 5,000-open-PR coverage bound are retained. Authentication, rate limits, cancellation and malformed or partial responses fail closed. GitHub writes are never replayed by this reader.
+
+Verification passed 467 unit tests, TypeScript, the production build and isolated installer checks. A real read-only large-repository map matched GitHub's independent open-PR total in 58.6 seconds; its slowest page took 4.4 seconds. Existing running companions must be stopped, updated with the installer, and reconnected with their new pairing link.
+
+## Explicit stale lock repair 0.2.3 — 2026-10-13
+
+`mergefoo doctor` now reports the saved plans lock, its recorded PID and the next step. It remains read-only. `mergefoo repair` works without GitHub access and removes only a verified dead process's private lock. Live or reused PIDs, denied or uncertain ownership, malformed records and concurrent repairs are retained. Recovery uses a separate exclusive claim and fresh file identity/liveness checks; saved plans are never opened or changed.
+
+Verification passed 493 unit tests, TypeScript, the production build and the isolated distribution checks. The bundled command repaired a real exited-process record without GitHub on PATH, preserved saved plans byte for byte, and refused a live process's lock. Update the executable on the computer running the companion, run `mergefoo repair`, then reconnect using the new pairing link.

@@ -31,6 +31,18 @@ try{
   assert.equal(version.code,0,version.stderr);assert.match(version.stdout,new RegExp(manifest.version.replaceAll('.','\\.')));
   const originalRuntime=await readFile(executable);
   assert.equal(manifest.bundle.sha256,createHash('sha256').update(originalRuntime).digest('hex'));
+  // Repair works without GitHub or repository dependencies, removes only a
+  // dead process record, and retains plans and live process locks.
+  const recovery=join(fixture,"private saved ' plans");await mkdir(recovery,{mode:0o700});
+  const savedPlans=join(recovery,'state.json'),processLock=join(recovery,'process.lock');
+  await writeFile(savedPlans,'preserve saved plans exactly\n',{mode:0o600});
+  const exited=await run(process.execPath,['-e','process.stdout.write(String(process.pid))']);assert.equal(exited.code,0);
+  await writeFile(processLock,JSON.stringify({pid:Number(exited.stdout)}),{mode:0o600});
+  const repaired=await run(process.execPath,[executable,'repair','--state-dir',recovery],{cwd:isolated,env:{PATH:'/usr/bin:/bin'}});
+  assert.equal(repaired.code,0,repaired.stderr);assert.match(repaired.stdout,/saved plans were kept/i);await assert.rejects(lstat(processLock),{code:'ENOENT'});assert.equal(await readFile(savedPlans,'utf8'),'preserve saved plans exactly\n');
+  await writeFile(processLock,JSON.stringify({pid:process.pid}),{mode:0o600});
+  const alive=await run(process.execPath,[executable,'repair','--state-dir',recovery],{cwd:isolated,env:{PATH:'/usr/bin:/bin'}});
+  assert.equal(alive.code,1);assert.match(alive.stderr,/still running/i);assert.equal(JSON.parse(await readFile(processLock,'utf8')).pid,process.pid);
   const fakeBin=join(fixture,'test binaries');await mkdir(fakeBin);
   await symlink(process.execPath,join(fakeBin,'node'));
   await writeFile(join(fakeBin,'gh'),'#!/bin/sh\nexit 0\n',{mode:0o700});
@@ -93,7 +105,7 @@ try{
   const symlinkInstall=await install(symlinkDirectory);assert.equal(symlinkInstall.code,1);assert.match(symlinkInstall.stderr,/regular directory/);
   const noGhBin=join(fixture,'node only');await mkdir(noGhBin);await symlink(process.execPath,join(noGhBin,'node'));
   const noGh=await install(join(fixture,'missing gh'),{PATH:`${noGhBin}:/usr/bin:/bin`});assert.equal(noGh.code,1);assert.match(noGh.stderr,/GitHub CLI is needed/);
-  process.stdout.write('Companion distribution passed: isolated help/version, quoted install path, private files, Node upgrades, reinstall, checksum failure, origin checks, missing download, non-writable/unrelated/symlink paths, and missing gh.\n');
+  process.stdout.write('Companion distribution passed: isolated help/version, stale lock repair/live lock refusal with saved plans retained, quoted install path, private files, Node upgrades, reinstall, checksum failure, origin checks, missing download, non-writable/unrelated/symlink paths, and missing gh.\n');
 }finally{
   if(server)await new Promise(resolve=>server.close(resolve));
   await rm(fixture,{recursive:true,force:true});

@@ -1,5 +1,7 @@
 # Hosting and durable state
 
+Background scheduling now discovers explicitly opted-in repositories from shared state on Cloudflare, Node and Vercel. The old operator list is migration-only; see [the current contract and capacity bounds](automation.md).
+
 merge.foo keeps the same vinext/React application and API routes on Cloudflare, a Node server, and Vercel. Build selection is explicit; authentication uses the configured exact `APP_ORIGIN` and its `/api/auth/callback`, rather than a provider-specific URL. Existing App callbacks must be preserved when adding another host.
 
 The current production address is `https://merge.foo`, connected to the existing Worker through an apex Custom Domain. Cloudflare provisions DNS/TLS. The old workers.dev hostname remains enabled; trusted browser aliases redirect before authentication cookies are issued, while webhook and protected runner endpoints remain available without redirects. `APP_ORIGIN_ALIASES` is an optional JSON list of exact trusted origins; malformed/unknown aliases cannot start OAuth. Preserve canonical-only CSRF and host-only cookies. See [domain cutover](domain.md).

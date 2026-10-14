@@ -2,7 +2,7 @@ import {homedir} from 'node:os';
 import {isAbsolute,join,resolve} from 'node:path';
 import type {CompanionOptions} from '../server';
 
-export type Command={command:'connect'|'doctor'|'help'|'version';options:CompanionOptions;guided:boolean;openBrowser:boolean};
+export type Command={command:'connect'|'doctor'|'repair'|'help'|'version';options:CompanionOptions;guided:boolean;openBrowser:boolean};
 export const validOwner=(owner:string)=>/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner);
 export const validRepository=(repository:string)=>/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)&&repository.split('/').every(part=>part!=='.'&&part!=='..')&&validOwner(repository.split('/')[0]);
 
@@ -19,11 +19,12 @@ export function parseCommand(args:string[]):Command {
   if(args.includes('--version')||args.includes('-v')){result.command='version';return result;}
   let index=0;
   if(args[0]&&!args[0].startsWith('-')){
-    if(!['connect','doctor'].includes(args[0]))throw new Error(`Unknown command: ${args[0]}. Run mergefoo --help for available commands.`);
-    result.command=args[0] as 'connect'|'doctor';index++;
+    if(!['connect','doctor','repair'].includes(args[0]))throw new Error(`Unknown command: ${args[0]}. Run mergefoo --help for available commands.`);
+    result.command=args[0] as 'connect'|'doctor'|'repair';index++;
   }
   for(;index<args.length;index++){
     const flag=args[index];if(flag==='--')continue;
+    if(result.command==='repair'&&flag!=='--state-dir')throw new Error('Use mergefoo repair, or mergefoo repair --state-dir PATH for a custom saved plans folder.');
     if(flag==='--read-only'){options.readOnly=true;continue;}
     if(flag==='--no-open'){result.openBrowser=false;continue;}
     if(!['--repo','--origin','--port','--state-dir'].includes(flag))throw new Error(`Unknown option: ${flag}. Run mergefoo --help for available options.`);
@@ -55,11 +56,13 @@ export const CLI_HELP=`merge.foo — bring your GitHub account to the merge map
 Usage
   mergefoo connect                     Guided setup, then open merge.foo
   mergefoo connect --repo owner/name    Connect a specific repository
-  mergefoo doctor                      Check GitHub CLI and account access
+  mergefoo doctor                      Check setup and companion state
+  mergefoo repair                      Safely clear a stale process lock
 
 Commands
   connect    Pick repositories and connect this computer (default)
-  doctor     Check your setup without connecting or changing GitHub
+  doctor     Check your setup and process lock without changing anything
+  repair     Clear a stale process lock; keep saved plans and running processes
 
 Options
   --repo owner/name   Allow this repository; repeat for more (up to 50)
@@ -72,7 +75,7 @@ Options
   --version, -v       Show the version
 
 Start with mergefoo connect. No repository clone or pnpm is needed.
-GitHub CLI must be installed: https://cli.github.com
+To connect, GitHub CLI must be installed: https://cli.github.com
 Your GitHub sign-in stays on this computer. Only selected repositories are
 available to merge.foo. Keep the terminal open while using your merge map.
 Use --repo for noninteractive setup.

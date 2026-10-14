@@ -42,7 +42,12 @@ test('local setup remains readable on desktop and mobile',async({page})=>{
 });
 
 test('signed-in repository onboarding and setup expose the companion alternative',async({page})=>{
-  await session(page,true);await page.goto('/');await expect(page.getByRole('combobox',{name:'Repository'})).toBeVisible();await expect(page.getByRole('link',{name:'Install or manage repository access',exact:true})).toBeVisible();
-  await expect(page.locator('.map-connect-card').getByRole('button',{name:'Use local companion',exact:true})).toBeVisible();
+  await session(page,true);
+  for(const mobile of [false,true]){
+    const width=mobile?390:1280,height=mobile?844:720;await page.setViewportSize({width,height});await page.goto('/');await expect(page.getByRole('heading',{name:'Choose where to start',exact:true})).toBeVisible();await expect(page.getByRole('combobox',{name:'Repository'})).toBeVisible();await expect(page.getByRole('link',{name:'Install or manage repository access',exact:true})).toBeVisible();
+    const companion=page.locator('.map-connect-card').getByRole('button',{name:'Use local companion',exact:true});await expect(companion).toBeVisible();
+    const button=await companion.boundingBox(),card=await page.locator('.map-connect-card').boundingBox();expect(button!.y).toBeGreaterThanOrEqual(card!.y);expect(button!.y+button!.height).toBeLessThanOrEqual(card!.y+card!.height);await fits(page,width,height);
+    await page.screenshot({path:`docs/screenshots/companion-signed-in-onboarding${mobile?'-mobile':''}.png`});
+  }
   await page.getByRole('button',{name:'Setup',exact:true}).click();const setup=page.getByRole('dialog',{name:'GitHub setup and permissions'});await setup.getByRole('button',{name:'Use local companion',exact:true}).click();await expect(setup.getByRole('heading',{name:'Connect from your computer'})).toBeVisible();await expect(setup).toContainText('https://merge.foo/install.sh');await expect(setup).not.toContainText('pnpm');await page.keyboard.press('Escape');await expect(setup).toHaveCount(0);
 });

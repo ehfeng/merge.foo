@@ -1,8 +1,31 @@
 import {describe,it,expect,vi,afterEach} from 'vitest';
-import {normalize,fetchRepository,fetchRepositoryWith,fetchReviewerSuggestions,repositories,validateRepositoryAccess} from './github';
+import {normalize,fetchRepository,fetchRepositoryWith,fetchReviewerSuggestions,repositories,validateRepositoryAccess,graphQuery,isTransientGraphFailure} from './github';
 import {isApproved,outstanding,stateOf} from '../domain/engine';
 const pr=(number:number,head:string,base='main',more:Record<string,unknown>={})=>({id:`github-${number}`,number,title:`PR ${number}`,url:`https://github.com/acme/platform/pull/${number}`,bodyText:'Description',isDraft:false,headRefName:head,baseRefName:base,headRepository:{id:'repo-node',nameWithOwner:'acme/platform'},baseRepository:{id:'repo-node',nameWithOwner:'acme/platform'},additions:10,deletions:2,reviewDecision:'REVIEW_REQUIRED',mergeable:'UNKNOWN',author:{login:'ehfeng'},statusCheckRollup:null,reviews:{nodes:[]},reviewRequests:{nodes:[]},timelineItems:{nodes:[]},labels:{nodes:[]},...more});
 const normalizeTest=(nodes:ReturnType<typeof pr>[],truncated=false)=>normalize(nodes as Parameters<typeof normalize>[0],'acme/platform',truncated);
+describe('GraphQL resource failure classification',()=>{
+  it.each([
+    [[{type:'TIMEOUT'}]],
+    [[{type:'MAX_NODE_LIMIT_EXCEEDED'}]],
+    [[{type:'RESOURCE_LIMIT_EXCEEDED'}]],
+    [[{message:"We couldn't respond to your request in time"}]],
+    [[{message:'Query execution timed out'}]],
+    [[{message:'Resource limits were exceeded'}]],
+  ])('classifies explicit deadline or resource errors only: %j',errors=>expect(isTransientGraphFailure(errors)).toBe(true));
+  it.each([
+    [undefined],
+    [[]],
+    [[null]],
+    [[{}]],
+    [[{message:'Resource not accessible by integration'}]],
+    [[{type:'RATE_LIMITED',message:'Query timed out'}]],
+    [[{type:'FORBIDDEN',message:'Resource limits exceeded'}]],
+    [[{message:'Field is undefined'}]],
+    [[{type:'TIMEOUT'},{type:'FORBIDDEN'}]],
+    [[{type:'RESOURCE_LIMIT_EXCEEDED'},{type:'RATE_LIMITED'}]],
+    [[{type:'TIMEOUT'},null]],
+  ])('rejects access, rate, validation, malformed or mixed errors: %j',errors=>expect(isTransientGraphFailure(errors)).toBe(false));
+});
 describe('GitHub read-only normalization',()=>{
   it('loads selected reviewer suggestions in GitHub order without assigning or notifying anyone',async()=>{
     const graph=vi.fn(async()=>({node:{__typename:'PullRequest',repository:{databaseId:9},suggestedReviewers:[{reviewer:{login:'zoe'},isAuthor:true,isCommenter:false},{reviewer:{login:'amy'},isAuthor:false,isCommenter:true}]}}));
@@ -25,6 +48,88 @@ describe('GitHub read-only normalization',()=>{
 describe('full repository ingestion',()=>{
   afterEach(()=>vi.unstubAllGlobals());
   const session={token:'test',userId:'1',login:'alice',expires:Date.now()+10000};
+  const directRepo={id:9,installationId:1,full_name:'acme/platform',private:true};
+  const directRead=(graph:unknown)=>fetchRepositoryWith({id:1,login:'alice'},directRepo,{request:async()=>{throw new Error('Map loading must not write.');},graph:graph as never});
+  const openPage=(nodes:ReturnType<typeof pr>[],hasNextPage=false,endCursor:string|null=null)=>({repository:{viewerPermission:'READ',pullRequests:{nodes,pageInfo:{hasNextPage,endCursor}}}});
+  it('shrinks only a failed read at the same cursor, then completes all authors without duplicates',async()=>{
+    const graph=vi.fn(async(query:string,variables:Record<string,unknown>)=>{
+      if(query.includes('Ancestry'))return openPage([]);
+      if(variables.cursor===null)return openPage([pr(1,'base','main',{author:{login:'alice'}})],true,'page-2');
+      if(variables.cursor==='page-2'&&variables.first===20)throw Object.assign(new Error('Gateway timeout'),{readRetryable:true});
+      if(variables.cursor==='page-2')return openPage([pr(2,'tip','base',{author:{login:'bob'}})],true,'page-3');
+      return openPage([pr(3,'other','main',{author:{login:'carol'}})]);
+    });
+    const {workspace}=await directRead(graph);
+    expect(workspace.prs.map(p=>p.author)).toEqual(['alice','bob','carol']);expect(workspace.prs[1].parentId).toBe('github-1');
+    const attempts=graph.mock.calls.filter(([query])=>query.includes('query WorkMap('));
+    expect(attempts.map(([,variables])=>[variables.cursor,variables.first])).toEqual([[null,20],['page-2',20],['page-2',10],['page-3',10]]);
+    expect(attempts.every(([query])=>query.includes('reviews(last:100)')&&query.includes('timelineItems(last:100')&&!query.includes('mutation'))).toBe(true);
+  });
+  it('keeps full open PR coverage beyond 100 reduced pages',async()=>{
+    const graph=vi.fn(async(query:string,variables:Record<string,unknown>)=>{
+      if(query.includes('Ancestry'))return openPage([]);
+      if(variables.first!==1)throw Object.assign(new Error('GitHub timeout'),{readRetryable:true});
+      const number=variables.cursor===null?1:Number(String(variables.cursor))+1;
+      return openPage([pr(number,`branch-${number}`)],number<105,String(number));
+    });
+    const {workspace}=await directRead(graph);
+    expect(workspace.prs).toHaveLength(105);expect(new Set(workspace.prs.map(p=>p.id)).size).toBe(105);
+    expect(graph.mock.calls.slice(0,4).map(([,variables])=>variables.first)).toEqual([20,10,5,1]);
+  });
+  it('propagates a persistent failure at the smallest page without returning a partial snapshot',async()=>{
+    const failure=Object.assign(new Error('GitHub timed out'),{readRetryable:true});
+    const graph=vi.fn(async(_query:string,variables:Record<string,unknown>)=>{if(variables.cursor===null)return openPage([pr(1,'base')],true,'failed-page');throw failure;});
+    await expect(directRead(graph)).rejects.toBe(failure);
+    expect(graph.mock.calls.map(([,variables])=>[variables.cursor,variables.first])).toEqual([[null,20],['failed-page',20],['failed-page',10],['failed-page',5],['failed-page',1]]);
+  });
+  it.each([
+    ['authentication',Object.assign(new Error('Sign in again'),{status:401})],
+    ['rate limits',Object.assign(new Error('Too many requests'),{status:429})],
+    ['local cancellation',Object.assign(new Error('The companion stopped'),{status:503})],
+    ['malformed data',new Error('Invalid GraphQL response')],
+    ['abort',Object.assign(new Error('Cancelled'),{name:'AbortError',readRetryable:true})],
+  ])('does not retry %s failures',async(_reason,failure)=>{
+    const graph=vi.fn(async()=>{throw failure;});await expect(directRead(graph)).rejects.toBe(failure);expect(graph).toHaveBeenCalledTimes(1);
+  });
+  it('can reduce a timed out read while preserving its original cursor',async()=>{
+    const graph=vi.fn(async(query:string,variables:Record<string,unknown>)=>{if(query.includes('Ancestry'))return openPage([]);if(variables.first===20)throw new DOMException('Deadline exceeded','TimeoutError');return openPage([pr(1,'a')]);});
+    await expect(directRead(graph)).resolves.toMatchObject({workspace:{prs:[{id:'github-1'}]}});
+    expect(graph.mock.calls.slice(0,2).map(([,variables])=>[variables.cursor,variables.first])).toEqual([[null,20],[null,10]]);
+  });
+  it.each([
+    ['duplicate IDs',[openPage([pr(1,'a')],true,'next'),openPage([pr(1,'a')])]],
+    ['duplicate IDs within a page',[openPage([pr(1,'a'),pr(1,'a')])]],
+    ['cursor cycles',[openPage([pr(1,'a')],true,'next'),openPage([pr(2,'b')],true,'third'),openPage([pr(3,'c')],true,'next')]],
+    ['empty cursor progress',[openPage([],true,'next')]],
+  ])('rejects %s rather than showing incomplete data',async(_reason,pages)=>{
+    let index=0;const graph=vi.fn(async()=>pages[index++]);await expect(directRead(graph)).rejects.toThrow('No partial graph was shown');expect(graph).toHaveBeenCalledTimes(pages.length);
+  });
+  it.each([502,503,504])('marks only an upstream HTTP %s as reducible',async status=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response('',{status})));
+    await expect(graphQuery('test','query WorkMap {}',{})).rejects.toMatchObject({readRetryable:true});
+  });
+  it.each([401,403,404,429,500])('does not mark upstream HTTP %s as reducible',async status=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response('',{status})));
+    await expect(graphQuery('test','query WorkMap {}',{})).rejects.toMatchObject({readRetryable:false});
+  });
+  it('refuses partial GraphQL data and retries its failed page after a resource error',async()=>{
+    const fetcher=vi.fn(async(_input:RequestInfo|URL,init?:RequestInit)=>{
+      const {query,variables}=JSON.parse(String(init?.body));
+      if(query.includes('Ancestry'))return Response.json({data:openPage([])});
+      if(variables.first===20)return Response.json({data:openPage([pr(999,'unusable')]),errors:[{type:'RESOURCE_LIMIT_EXCEEDED',message:'Query resource limits were exceeded'}]});
+      return Response.json({data:openPage([pr(1,'complete')])});
+    });vi.stubGlobal('fetch',fetcher);
+    const result=await directRead((query:string,variables:Record<string,unknown>)=>graphQuery('test',query,variables));
+    expect(result.workspace.prs.map(p=>p.id)).toEqual(['github-1']);expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it('keeps the original 5000-PR coverage limit after shrinking read pages',async()=>{
+    const graph=vi.fn(async(_query:string,variables:Record<string,unknown>)=>{
+      if(variables.first===20)throw Object.assign(new Error('GitHub timeout'),{readRetryable:true});
+      const offset=Number(variables.cursor??0);
+      return openPage(Array.from({length:10},(_,index)=>pr(offset+index+1,`branch-${offset+index+1}`)),true,String(offset+10));
+    });
+    await expect(directRead(graph)).rejects.toThrow('No partial graph was shown');expect(graph).toHaveBeenCalledTimes(501);
+  });
   it('loads a directly authorized repository through gh without an App installation or exported token',async()=>{
     const directFetch=vi.fn(()=>{throw new Error('Local reads must use the supplied API');});vi.stubGlobal('fetch',directFetch);
     const query=vi.fn(async(query:string)=>({repository:{viewerPermission:'READ',pullRequests:{
@@ -35,6 +140,10 @@ describe('full repository ingestion',()=>{
     expect(result.workspace.prs.map(p=>p.canEditPlan)).toEqual([true,false]);expect(directFetch).not.toHaveBeenCalled();expect(query).toHaveBeenCalledTimes(2);
   });
   const mock=(pages:Record<string,unknown>[])=>{let count=0;const fetcher=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input);if(url.endsWith('/user/installations?per_page=100&page=1'))return Response.json({installations:[{id:8}]});if(url.includes('/user/installations/8/repositories'))return Response.json({repositories:[{id:1,full_name:'acme/platform',private:false}]});if(url.endsWith('/graphql')){const body=JSON.parse(String(init?.body));if(body.query.includes('Ancestry'))return Response.json({data:{repository:{viewerPermission:'WRITE',pullRequests:{nodes:[],pageInfo:{hasNextPage:false,endCursor:null}}}}});return Response.json({data:pages[count++]});}throw new Error('Unexpected test URL '+url);});vi.stubGlobal('fetch',fetcher);return fetcher;};
+  it('reports the accepted installation review permission separately from repository visibility',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>{const url=String(input);if(url.includes('/user/installations?'))return Response.json({installations:[{id:8,permissions:{pull_requests:'write'}},{id:9,permissions:{pull_requests:'read'}}]});if(url.includes('/8/repositories?'))return Response.json({repositories:[{id:1,full_name:'fixture/write',private:false}]});if(url.includes('/9/repositories?'))return Response.json({repositories:[{id:2,full_name:'fixture/read',private:true}]});throw new Error('Unexpected fixture path.');}));
+    expect(await repositories(session)).toEqual([{id:1,installationId:8,full_name:'fixture/write',private:false,canRequestReviews:true},{id:2,installationId:9,full_name:'fixture/read',private:true,canRequestReviews:false}]);
+  });
   it('completes raw pagination before excluding archived repositories across installations',async()=>{
     const publicRepo={id:101,full_name:'owner/active-public',private:false,archived:false};const privateRepo={id:102,full_name:'owner/active-private',private:true,archived:false};
     const fetcher=vi.fn(async(input:RequestInfo|URL)=>{

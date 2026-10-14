@@ -2,6 +2,7 @@ import {github,type Session} from './auth';
 import {verifyIdentity,fetchRepository,type Repo,AccessError} from './github';
 import {loadPlans,planKey} from './plans';
 import {getStateStore} from './state/store';
+import {registerAutomationRepository} from './automation-registry';
 import {workflowStore} from './state/workflow';
 import {WorkflowService,hydrateWorkspace} from '../workflow/service';
 import {GitHubWorkflowTransport} from './workflow-github';
@@ -20,7 +21,7 @@ async function actorAccess(data:Session,repo:Repo):Promise<WorkflowActor> {
 }
 export async function loadCoordination(data:Session,repo:Repo,workspace:Workspace) {
   const actor=await actorAccess(data,repo);const service=await workflowService();
-  return {workspace:hydrateWorkspace(workspace,await service.read(planKey(repo))),coordination:{canManage:actor.canWrite,writesEnabled:workflowWritesEnabled(),backgroundEnabled:backgroundConfigured(repo)},viewerLogin:actor.login};
+  return {workspace:hydrateWorkspace(workspace,await service.read(planKey(repo))),coordination:{canManage:actor.canWrite,writesEnabled:workflowWritesEnabled(),backgroundEnabled:backgroundConfigured()&&repo.canRequestReviews!==false,...(repo.canRequestReviews===false?{backgroundReason:'Ask a repository administrator to approve Pull requests write access for merge.foo in GitHub.'}:{})},viewerLogin:actor.login};
 }
 async function settingsView(data:Session,repository:string,command:WorkflowCommand) {
   const identity=await verifyIdentity(data);const view=await fetchRepository({...data,login:identity.login},repository);await loadPlans(view.repo,view.workspace);
@@ -42,14 +43,17 @@ export async function updateWorkflow(request:Request,data:Session) {
   const view=settings?await settingsView(data,input.repository,input.command):await transport.fetchView();const actor=await actorAccess(data,view.repo);
   if((input.command.type==='enroll'||input.command.type==='auto')&&!actor.canWrite)throw new AccessError('A repository writer must enable or manage this feature.');
   if(input.command.type==='start'&&!actor.canWrite)throw new AccessError('GitHub requires repository write access to request reviews.');
-  if((input.command.type==='auto'&&input.command.enabled)||(input.command.type==='enroll'&&input.command.autoProgress)||input.command.type==='start')if(!workflowWritesEnabled()||!backgroundConfigured(view.repo))throw new AccessError('The operator must finish background review setup for this repository before live review actions can be enabled.',503);
+  if((input.command.type==='auto'&&input.command.enabled)||(input.command.type==='enroll'&&input.command.autoProgress)||input.command.type==='start')if(!workflowWritesEnabled()||!backgroundConfigured()||view.repo.canRequestReviews===false)throw new AccessError(view.repo.canRequestReviews===false?'Approve Pull requests write access for merge.foo in GitHub installation settings.':'Review automation is unavailable. The operator needs to finish server setup.',503);
   if(input.command.type==='start'&&!workflowWritesEnabled())throw new AccessError('GitHub review actions are not enabled by the operator.',503);
   if(input.command.type==='start'){
     const targetId=input.command.prId;const target=view.workspace.prs.find(pr=>pr.id===targetId);
     if(!target||target.planVersion!==input.expectedPlanVersion||JSON.stringify(target.plannedReviewerIdentities??[])!==JSON.stringify(input.expectedReviewers))throw new AccessError('The reviewer plan changed after your preview. Refresh and review the recipients before starting.',409);
   }
-  const service=await workflowService();const scope=planKey(view.repo);
-  const document=await service.command(scope,view.snapshot,actor,input.command,input.version);
+  const store=await getStateStore();const service=new WorkflowService(workflowStore(store));const scope=planKey(view.repo);
+  const document=await service.command(scope,view.snapshot,actor,input.command,input.version,async next=>{
+    if(!Object.values(next.config.stacks).some(stack=>stack.enrolled))return;
+    try{await registerAutomationRepository(store,view.repo,actor);}catch{throw new AccessError('Repository automation registration is unavailable. Retry this feature update.',503);}
+  });
   // Signed deliveries and an independent scheduler drive the durable outbox.
-  return {workspace:hydrateWorkspace(view.workspace,document),coordination:{canManage:actor.canWrite,writesEnabled:workflowWritesEnabled(),backgroundEnabled:backgroundConfigured(view.repo)},viewerLogin:actor.login};
+  return {workspace:hydrateWorkspace(view.workspace,document),coordination:{canManage:actor.canWrite,writesEnabled:workflowWritesEnabled(),backgroundEnabled:backgroundConfigured()&&view.repo.canRequestReviews!==false,...(view.repo.canRequestReviews===false?{backgroundReason:'Ask a repository administrator to approve Pull requests write access for merge.foo in GitHub.'}:{})},viewerLogin:actor.login};
 }
