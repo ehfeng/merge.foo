@@ -51,9 +51,9 @@ export async function drainBackground(repo:Repo,maxSteps=1) {
   const transport=new GitHubWorkflowTransport({repository:registered.full_name,enabled:true,externalRequestLimit:36,loadWorkspacePlans:loadPlans,principal:async()=>{
     // One fresh scoped token per bounded invocation; each dispatch rechecks access and actor grant.
     if(process.env.GITHUB_WORKFLOW_WRITES_ENABLED!=='true')throw new AccessError('Background review authorization is unavailable.');
-    const current=await github<{id:number;full_name:string;archived:boolean}>(token,`/repos/${registered.full_name}`);
+    const current=await github<{id:number;full_name:string;default_branch:string;archived:boolean}>(token,`/repos/${registered.full_name}`);
     if(current.id!==registered.id||typeof current.full_name!=='string'||current.full_name.toLowerCase()!==registered.full_name.toLowerCase()||current.archived!==false)throw new AccessError('The selected repository is no longer available or is archived.');
-    return {token,actor:{...bot,canWrite:true},repository:registered,effectActor:bot,authorizeScope:async(action,doc)=>authorizeBackgroundGrant(token,registered,action,doc)};
+    return {token,actor:{...bot,canWrite:true},repository:registered,repositoryMetadata:current,effectActor:bot,authorizeScope:async(action,doc)=>authorizeBackgroundGrant(token,registered,action,doc)};
   }});
   let executed=0,version=document.version,reason:string|undefined;
   for(let step=0;step<Math.min(maxSteps,1);step++){const result=await service.runNext(scope,transport,crypto.randomUUID());version=result.document.version;reason=result.reason;if(!result.executed)break;executed++;}

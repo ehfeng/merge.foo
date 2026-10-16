@@ -14,7 +14,7 @@ function setup(failure:Failure,background=false){
     if(url.includes('/user/installations?'))return Response.json({installations:[{id:9}]});
     if(url.includes('/user/installations/9/repositories?'))return Response.json({repositories:[repo]});
     if(url.includes('/collaborators/alice/permission'))return Response.json({permission:'write',user:{id:1,login:'alice'}});
-    if(url.endsWith('/repos/fixture/repo'))return failure==='metadata'?new Response(null,{status:401}):Response.json({id:4,default_branch:'main',archived:false});
+    if(url.endsWith('/repos/fixture/repo'))return failure==='metadata'?new Response(null,{status:401}):Response.json({id:4,full_name:repo.full_name,default_branch:'main',archived:false});
     if(url.includes('/rules/branches/'))return failure==='rules'?new Response(null,{status:401}):Response.json([]);
     if(url.includes('/collaborators/sam/permission'))return failure==='reviewerPermission'?new Response(null,{status:401}):Response.json({permission:'read',user:{id:2,login:'sam'}});
     if(body?.query.includes('WorkflowMap')&&failure==='map'||body?.query.includes('WorkflowClassicPolicy')&&failure==='classicPolicy'||body?.query.includes('WorkflowTimeline')&&failure==='timeline'||body?.query.includes('WorkflowReviews')&&failure==='reviews')return new Response(null,{status:401});

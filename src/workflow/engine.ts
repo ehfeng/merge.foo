@@ -11,7 +11,7 @@ export function decisiveReviews(reviews:WorkflowReview[]):WorkflowReview[] {
 export function approvalGate(pr:WorkflowPr,minimum=1):'passed'|'failed'|'unknown' {
   if(pr.lifecycle==='merged')return 'passed';if(pr.lifecycle==='closed')return 'failed';
   if(pr.githubGate==='changes_requested'||pr.githubGate==='review_required')return 'failed';
-  if(!pr.reviewsComplete||pr.reviews.some(r=>r.state!=='commented'&&!Number.isFinite(Date.parse(r.submittedAt))))return 'unknown';
+  if(!pr.reviewsComplete||pr.reviewEligibilityComplete===false||pr.reviews.some(r=>r.state!=='commented'&&!Number.isFinite(Date.parse(r.submittedAt))))return 'unknown';
   const reviews=decisiveReviews(pr.reviews).filter(r=>r.eligible&&r.reviewerId!==pr.author.id);
   if(reviews.some(r=>r.state==='changes_requested')||reviews.filter(r=>r.state==='approved').length<Math.max(1,minimum))return 'failed';return pr.githubGate==='unknown'?'unknown':'passed';
 }

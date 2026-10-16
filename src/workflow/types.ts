@@ -1,7 +1,7 @@
 export type Identity={id:string;login:string};
 export type WorkflowReview={id:string;reviewerId:string;reviewerLogin?:string;state:'approved'|'changes_requested'|'commented'|'dismissed';submittedAt:string;eligible:boolean};
 export type ObservedRequest={reviewerId:string;login:string;eventId?:string;requestedAt?:string;actorId?:string};
-export type WorkflowPr={id:string;number:number;stackId:string;parentId?:string;author:Identity;lifecycle:'open'|'merged'|'closed';readiness:'draft'|'ready';topologyVerified?:boolean;githubGate:'approved'|'changes_requested'|'review_required'|'none'|'unknown';reviewsComplete:boolean;reviews:WorkflowReview[];requests:ObservedRequest[];requestsComplete?:boolean;eventIds?:string[];plannedReviewers:Identity[];readinessEvent?:{id:string;at:string;actorId:string;readiness:'draft'|'ready'}};
+export type WorkflowPr={id:string;number:number;stackId:string;parentId?:string;author:Identity;lifecycle:'open'|'merged'|'closed';readiness:'draft'|'ready';topologyVerified?:boolean;githubGate:'approved'|'changes_requested'|'review_required'|'none'|'unknown';reviewsComplete:boolean;reviewEligibilityComplete?:boolean;reviews:WorkflowReview[];requests:ObservedRequest[];requestsComplete?:boolean;eventIds?:string[];plannedReviewers:Identity[];readinessEvent?:{id:string;at:string;actorId:string;readiness:'draft'|'ready'}};
 export type WorkflowSnapshot={scope:string;repository:string;observedAt:string;complete:boolean;prs:WorkflowPr[]};
 export type WorkflowActor=Identity&{canWrite:boolean};
 export type PrConfiguration={held:boolean;minimumApprovals:number;parentId?:string|null;manualOverride:boolean};
