@@ -67,6 +67,16 @@ test('a delayed hosted session cannot overwrite a newly paired local session',as
   await page.getByRole('combobox',{name:'Repository'}).selectOption(repo.full_name);await expect(page.locator('.map-mode')).toHaveText('LOCAL GITHUB CLI');await expect(page.getByRole('link',{name:'Continue with GitHub'})).toHaveCount(0);
 });
 
+test('an expired local session with an invalid body shows pairing recovery',async({page})=>{
+  await hosted(page);await local(page);
+  await page.route('http://127.0.0.1:4318/api/session',route=>route.fulfill({headers,status:401,body:'{'}));
+  await page.goto(`/${fragment}`);await page.getByRole('button',{name:'Connect this computer',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText(/pairing.*expired/i);
+  await expect(page.getByRole('region',{name:'Local companion connection'}).getByRole('status')).toHaveText('OFFLINE');
+  await expect(page.getByRole('combobox',{name:'Repository'})).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'Continue with GitHub'})).toHaveCount(0);
+});
+
 test('companion polling pauses for PR edits and stops after disconnect',async({page})=>{
   await hosted(page);let reads=0;await local(page);await page.route('http://127.0.0.1:4318/api/github/workspace?*',route=>{reads++;return route.fulfill({headers,json:snapshot()});});
   await page.clock.install();await page.goto(`/${fragment}`);await page.getByRole('button',{name:'Connect this computer',exact:true}).click();await selectRepositoryNetwork(page);await expect(page.getByTestId('pr-145')).toBeVisible();expect(reads).toBe(1);

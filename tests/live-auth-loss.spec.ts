@@ -10,6 +10,17 @@ async function connected(page:Page){
 async function selectRepository(page:Page){await page.goto('/');await page.getByRole('combobox',{name:'Repository'}).selectOption(repo.full_name);await expect(page.getByTestId('pr-145')).toBeVisible();}
 async function editPlan(page:Page,number=145){await page.getByRole('dialog',{name:`Details for #${number}`}).getByRole('button',{name:`Reviewers for #${number}`}).click();await page.getByRole('dialog',{name:`Reviewer plan for #${number}`}).getByRole('checkbox').first().click();}
 async function signedOut(page:Page){await expect(page.getByRole('link',{name:'Continue with GitHub',exact:true})).toBeVisible();await expect(page.locator('.map-pr')).toHaveCount(0);await expect(page.getByRole('combobox',{name:'Repository'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toHaveCount(0);}
+test('an expired hosted session offers sign-in on first load and after reload',async({page})=>{
+  await page.route('**/api/session',route=>route.fulfill({status:401,json:{configured:true,authenticated:false,error:'GitHub session expired. Sign in again.'}}));
+  await page.goto('/');await signedOut(page);await expect(page.getByRole('alert')).toContainText('Sign in again');
+  await page.reload();await signedOut(page);await expect(page.getByRole('alert')).toContainText('Sign in again');
+});
+for(const [name,body] of [['empty',''],['malformed','{'],['claims authenticated','{"configured":true,"authenticated":true,"login":"alice"}']] as const){
+  test(`an expired hosted session with ${name} JSON still clears private state`,async({page})=>{
+    await page.route('**/api/session',route=>route.fulfill({status:401,body}));
+    await page.goto('/');await signedOut(page);await expect(page.getByRole('alert')).toContainText('Sign in again');
+  });
+}
 for(const operation of ['workspace','plans','workflow'] as const){
   test(`${operation} authentication loss clears the connected view even without a JSON body`,async({page})=>{
     await connected(page);let reads=0;

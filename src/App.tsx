@@ -42,12 +42,12 @@ export default function App() {
     setWorkspace(data);setMode('lab');setScope('all');setSelected(null);setView('graph');setError('');setWarnings([]);history.replaceState(null,'','?lab=1');
   }
   const clearRepositoryView=useCallback(()=>{requestEpoch.current++;selectedRepository.current=null;setRepository('');setWorkspace(null);setCoordination(undefined);setSelected(null);setWarnings([]);setBusy(false);setQuery('');setView('graph');setRepoListError(false);},[]);
-  const clearAuthentication=useCallback((message?:string)=>{
+  const clearAuthentication=useCallback((message?:string,hostedConfigured?:boolean)=>{
     authenticated.current=false;authEpoch.current++;repoListEpoch.current++;mutationEpoch.current++;installReturnPending.current=false;
     sessionRequest.current?.abort();
     repoRefresh.current?.controller.abort();repoRefresh.current=null;repositoryList.current=[];setRepos([]);
     clearRepositoryView();setSuggestionStatus(null);setRepoLoading(false);setMode('connect');setNotice('');setTools(false);
-    setAuth(value=>({configured:companionRef.current?false:value?.configured??false,authenticated:false,installationUrl:companionRef.current?undefined:value?.installationUrl,connection:companionRef.current?'companion':undefined}));
+    setAuth(value=>({configured:companionRef.current?false:hostedConfigured??value?.configured??false,authenticated:false,installationUrl:companionRef.current?undefined:value?.installationUrl,connection:companionRef.current?'companion':undefined}));
     setError(companionRef.current?'The local pairing has expired. Restart the helper and connect using its new pairing URL.':message??'Sign in again to continue.');
   },[clearRepositoryView]);
   const refreshRepositories=useCallback((afterInstallation=false):Promise<void>=>{
@@ -77,7 +77,11 @@ export default function App() {
   useEffect(()=>{const returned=()=>{if(document.visibilityState==='visible'&&installReturnPending.current&&authenticated.current){installReturnPending.current=false;void refreshRepositories(true);}};window.addEventListener('focus',returned);document.addEventListener('visibilitychange',returned);return()=>{window.removeEventListener('focus',returned);document.removeEventListener('visibilitychange',returned);};},[refreshRepositories]);
   const connectSession=useCallback(async()=>{
     const generation=authEpoch.current;sessionRequest.current?.abort();const controller=new AbortController();sessionRequest.current=controller;
-    try{const response=await apiFetch('/api/session',{signal:controller.signal});if(controller.signal.aborted||generation!==authEpoch.current)return;if(response.status===401){clearAuthentication();return;}const data:Auth=await response.json();if(controller.signal.aborted||generation!==authEpoch.current)return;
+    try{const response=await apiFetch('/api/session',{signal:controller.signal});if(controller.signal.aborted||generation!==authEpoch.current)return;if(response.status===401){
+      const body:unknown=await response.json().catch(()=>null);if(controller.signal.aborted||generation!==authEpoch.current)return;
+      const configured=body&&typeof body==='object'&&!Array.isArray(body)&&'authenticated'in body&&body.authenticated===false&&'configured'in body&&typeof body.configured==='boolean'?body.configured:true;
+      clearAuthentication(undefined,configured);return;
+    }const data:Auth=await response.json();if(controller.signal.aborted||generation!==authEpoch.current)return;
       if(!response.ok)throw new Error(data.error??'Could not connect.');authenticated.current=data.authenticated;setAuth(data);
       if(data.error)setError(data.error);if(data.authenticated){if(!new URLSearchParams(location.search).has('lab'))setMode('live');await refreshRepositories();}
     }catch(err){if(!controller.signal.aborted&&generation===authEpoch.current){authenticated.current=false;setAuth({configured:false,authenticated:false,connection:companionRef.current?'companion':undefined});setError(companionRef.current?err instanceof Error?err.message:'Could not reach the local GitHub CLI companion.':'Could not reach the app server.');}}
